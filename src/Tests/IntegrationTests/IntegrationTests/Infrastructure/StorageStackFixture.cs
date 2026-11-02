@@ -345,6 +345,7 @@ public sealed class StorageStackFixture(SaveChangesInterceptor? interceptor = nu
             builder.UseSetting("Auth:PublicOrigin", "https://frontend.test");
             builder.UseSetting("Auth:ClientId", "froststream-bff");
             builder.UseSetting("Auth:ClientSecret", "integration-test-secret");
+            builder.UseSetting("MediaProcessorStorage:Token", "integration-test-storage-token");
             builder.UseSetting("Auth:Scopes", "openid profile email groups offline_access");
             builder.UseSetting("Auth:Audience", TestTokenIssuer.Audience);
             builder.UseSetting("OpenFga:Endpoint", identity.Endpoint);
