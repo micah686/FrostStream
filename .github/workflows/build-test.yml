@@ -44,7 +44,7 @@ jobs:
       - name: Build solution
         run: dotnet build FrostStream.slnx --configuration Release --nologo -m:1
       - name: Run unit tests
-        run: dotnet run --no-build --project src/Tests/UnitTests/UnitTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/unit-results"
+        run: dotnet run --no-build --project src/Tests/UnitTests/UnitTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/unit-results" --coverage --coverage-output "$RUNNER_TEMP/unit-results/coverage.cobertura.xml" --coverage-output-format cobertura
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -76,14 +76,40 @@ jobs:
         run: dotnet build '${{ matrix.project }}' --configuration Release --nologo -m:1
       - name: Build integration tests
         run: dotnet build src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release --nologo -m:1
+      - name: Install ReportGenerator
+        run: dotnet tool install dotnet-reportgenerator-globaltool --tool-path "$RUNNER_TEMP/tools" --version 5.5.12
       # Full runs the complete integration suite, including shared tests. Lite gets its
       # own independent run so its failures are visible even when Full fails.
       - name: Run Full and shared integration tests
         if: matrix.edition == 'Full'
-        run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/integration-results"
+        run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --results-directory "$RUNNER_TEMP/integration-results" --coverage --coverage-output "$RUNNER_TEMP/integration-results/coverage.cobertura.xml" --coverage-output-format cobertura
       - name: Run Lite integration tests
         if: matrix.edition == 'Lite'
-        run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --treenode-filter '/*/IntegrationTests.Lite/*/*' --results-directory "$RUNNER_TEMP/integration-results"
+        run: dotnet run --no-build --project src/Tests/IntegrationTests/IntegrationTests/IntegrationTests.csproj --configuration Release -- --minimum-expected-tests 1 --maximum-parallel-tests 4 --treenode-filter '/*/IntegrationTests.Lite/*/*' --results-directory "$RUNNER_TEMP/integration-results" --coverage --coverage-output "$RUNNER_TEMP/integration-results/coverage.cobertura.xml" --coverage-output-format cobertura
+      - name: Generate ${{ matrix.edition }} coverage report
+        if: always()
+        shell: bash
+        run: |
+          coverage_file="$RUNNER_TEMP/integration-results/coverage.cobertura.xml"
+          if [[ -f "$coverage_file" ]]; then
+            "$RUNNER_TEMP/tools/reportgenerator" \
+              "-reports:$coverage_file" \
+              "-targetdir:$RUNNER_TEMP/coverage-report" \
+              "-reporttypes:Html;MarkdownSummaryGithub" \
+              "-title:${{ matrix.edition }} integration coverage"
+            if [[ -f "$RUNNER_TEMP/coverage-report/SummaryGithub.md" ]]; then
+              cat "$RUNNER_TEMP/coverage-report/SummaryGithub.md" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "Coverage data was not produced; skipping HTML report generation."
+          fi
+      - name: Upload ${{ matrix.edition }} coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-${{ matrix.edition }}
+          path: ${{ runner.temp }}/coverage-report/
+          if-no-files-found: ignore
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

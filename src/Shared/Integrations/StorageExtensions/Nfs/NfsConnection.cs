@@ -10,18 +10,31 @@ namespace StorageExtensions.Nfs;
 /// safe for concurrent use: every operation runs under <see cref="_gate"/>. Callers await
 /// the gate, but the protocol work itself blocks, which is inherent to the library.
 /// </remarks>
-internal sealed class NfsConnection(NfsOptions options) : IDisposable
+internal sealed class NfsConnection : IDisposable
 {
+    private readonly NfsOptions options;
+    private readonly Func<NfsOptions, INfsFileSystem> _createFileSystem;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private NfsFileSystem? _fileSystem;
+    private INfsFileSystem? _fileSystem;
     private bool _disposed;
+
+    public NfsConnection(NfsOptions options)
+        : this(options, CreateFileSystem)
+    {
+    }
+
+    internal NfsConnection(NfsOptions options, Func<NfsOptions, INfsFileSystem> createFileSystem)
+    {
+        this.options = options;
+        _createFileSystem = createFileSystem;
+    }
 
     public NfsOptions Options => options;
 
     /// <summary>
     /// Runs an operation against the export, connecting on first use.
     /// </summary>
-    public async Task<T> ExecuteAsync<T>(Func<NfsFileSystem, T> action, CancellationToken cancellationToken = default)
+    public async Task<T> ExecuteAsync<T>(Func<INfsFileSystem, T> action, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -52,7 +65,7 @@ internal sealed class NfsConnection(NfsOptions options) : IDisposable
         }
     }
 
-    private NfsFileSystem Connect()
+    private INfsFileSystem Connect()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -61,16 +74,19 @@ internal sealed class NfsConnection(NfsOptions options) : IDisposable
             return _fileSystem;
         }
 
+        _fileSystem = _createFileSystem(options);
+        return _fileSystem;
+    }
+
+    private static INfsFileSystem CreateFileSystem(NfsOptions options)
+    {
         var credentials = options.AuxiliaryGroupIds.Count > 0
             ? new RpcUnixCredential(options.UserId, options.GroupId, [.. options.AuxiliaryGroupIds])
             : new RpcUnixCredential(options.UserId, options.GroupId);
-
         var fileSystem = new NfsFileSystem(options.Host, credentials, options.Export);
         fileSystem.NfsOptions.NewFilePermissions = options.NewFilePermissions;
         fileSystem.NfsOptions.NewDirectoryPermissions = options.NewDirectoryPermissions;
-
-        _fileSystem = fileSystem;
-        return _fileSystem;
+        return new DiscUtilsNfsFileSystem(fileSystem);
     }
 
     public void Dispose()

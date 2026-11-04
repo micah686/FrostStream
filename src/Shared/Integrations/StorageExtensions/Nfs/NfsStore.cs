@@ -44,6 +44,23 @@ public class NfsStore : StoreBase
         _basePath = options.BasePath;
     }
 
+    internal NfsStore(NfsOptions options, Func<NfsOptions, INfsFileSystem> createFileSystem)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (string.IsNullOrWhiteSpace(options.Host))
+        {
+            throw new ArgumentException("NFS storage requires a host.", nameof(options));
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Export))
+        {
+            throw new ArgumentException("NFS storage requires an export path.", nameof(options));
+        }
+
+        _connection = new NfsConnection(options, createFileSystem);
+        _basePath = options.BasePath;
+    }
+
     /// <summary>
     /// Lists the exports a server offers. Useful for validating configuration before a
     /// store is created.
@@ -58,7 +75,7 @@ public class NfsStore : StoreBase
 
     /// <summary>Returns the connected <see cref="NfsFileSystem"/>.</summary>
     public override Task<object> GetClient()
-        => _connection.ExecuteAsync(object (fs) => fs);
+        => _connection.ExecuteAsync(object (fs) => fs.Client);
 
     /// <summary>
     /// Lists one folder. Recursion, filtering, and result limits are applied by
@@ -481,7 +498,7 @@ public class NfsStore : StoreBase
     /// The library's own <c>FileExists</c> and <c>DirectoryExists</c> throw for missing
     /// paths instead of returning false, so existence checks go through this.
     /// </remarks>
-    private static bool TryGetAttributes(NfsFileSystem fileSystem, string path, out FileAttributes attributes)
+    private static bool TryGetAttributes(INfsFileSystem fileSystem, string path, out FileAttributes attributes)
     {
         try
         {
