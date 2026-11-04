@@ -20,12 +20,25 @@ internal sealed record SmbSession(ISMBClient Client, ISMBFileStore Tree);
 /// Every operation therefore runs under <see cref="_gate"/>. Callers await the gate but
 /// the protocol work itself is blocking, which is inherent to the library.
 /// </remarks>
-internal sealed class SmbConnection(SmbOptions options) : IDisposable
+internal sealed class SmbConnection : IDisposable
 {
+    private readonly SmbOptions options;
+    private readonly Func<SmbSession>? _createSession;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ISMBClient? _client;
     private ISMBFileStore? _tree;
     private bool _disposed;
+
+    public SmbConnection(SmbOptions options)
+    {
+        this.options = options;
+    }
+
+    internal SmbConnection(SmbOptions options, Func<SmbSession> createSession)
+        : this(options)
+    {
+        _createSession = createSession;
+    }
 
     /// <summary>
     /// Runs an operation against the share, reconnecting once if the connection has dropped.
@@ -62,6 +75,11 @@ internal sealed class SmbConnection(SmbOptions options) : IDisposable
         _gate.Wait();
         try
         {
+            if (_createSession is not null)
+            {
+                return action(_createSession());
+            }
+
             if (_client is null || _tree is null || !_client.IsConnected)
             {
                 throw new IOException("The SMB connection was lost while a file was open.");
@@ -78,6 +96,11 @@ internal sealed class SmbConnection(SmbOptions options) : IDisposable
     private SmbSession Connect()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_createSession is not null)
+        {
+            return _createSession();
+        }
 
         if (_client is not null && _tree is not null && _client.IsConnected)
         {
@@ -184,7 +207,10 @@ internal sealed class SmbConnection(SmbOptions options) : IDisposable
         _gate.Wait();
         try
         {
-            Reset();
+            if (_createSession is null)
+            {
+                Reset();
+            }
         }
         finally
         {

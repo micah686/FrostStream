@@ -34,6 +34,16 @@ public class SmbStore : StoreBase
     /// is established lazily on first use.
     /// </summary>
     public SmbStore(SmbOptions options)
+        : this(options, new SmbConnection(options))
+    {
+    }
+
+    internal SmbStore(SmbOptions options, Func<SmbSession> createSession)
+        : this(options, new SmbConnection(options, createSession))
+    {
+    }
+
+    private SmbStore(SmbOptions options, SmbConnection connection)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(options.Host))
@@ -46,7 +56,7 @@ public class SmbStore : StoreBase
             throw new ArgumentException("SMB storage requires a share name.", nameof(options));
         }
 
-        _connection = new SmbConnection(options);
+        _connection = connection;
         _basePath = options.BasePath;
     }
 
