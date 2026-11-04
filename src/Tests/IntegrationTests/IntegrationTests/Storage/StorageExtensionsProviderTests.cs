@@ -7,6 +7,7 @@ using Shouldly;
 using StorageExtensions.Nfs;
 using StorageExtensions.Smb;
 using TUnit.Core;
+using TUnit.Core.Enums;
 
 namespace IntegrationTests.Storage;
 
@@ -37,9 +38,19 @@ public class StorageExtensionsProviderTests
         }
         else
         {
-            await Fixture.RunInsideServiceNetworkAsync(
-                "IntegrationTests.Storage.StorageExtensionsProviderTests.1.1.Nfs_Store_Exercises_Real_Export_File_And_Directory_Operations.1.1.0",
-                "nfs");
+            try
+            {
+                await Fixture.RunInsideServiceNetworkAsync(
+                    "IntegrationTests.Storage.StorageExtensionsProviderTests.1.1.Nfs_Store_Exercises_Real_Export_File_And_Directory_Operations.1.1.0",
+                    "nfs");
+            }
+            catch (Exception ex) when (IsNfsKernelUnavailable(ex))
+            {
+                TestContext.Current!.Execution.OverrideResult(
+                    TestState.Skipped,
+                    "NFS integration requires the host NFS kernel module and privileged container support.");
+            }
+
             return;
         }
 
@@ -157,6 +168,11 @@ public class StorageExtensionsProviderTests
         await Should.ThrowAsync<InvalidOperationException>(() => setup.DeleteDirectory("", recursive: false));
         await setup.DeleteDirectory(root, recursive: true);
     }
+
+    private static bool IsNfsKernelUnavailable(Exception exception)
+        => exception.ToString().Contains("kernel module nfs is missing", StringComparison.OrdinalIgnoreCase)
+            || exception.ToString().Contains("nfs module is not loaded", StringComparison.OrdinalIgnoreCase)
+            || exception.ToString().Contains("operation not permitted", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed class StorageProtocolContainerFixture : IAsyncDisposable
@@ -242,6 +258,12 @@ internal sealed class StorageProtocolContainerFixture : IAsyncDisposable
             return true;
         }
         catch (Exception ex) when (ex.ToString().Contains("rootlessport cannot expose privileged port 111", StringComparison.OrdinalIgnoreCase))
+        {
+            await _nfs!.DisposeAsync();
+            return false;
+        }
+        catch (Exception ex) when (ex.ToString().Contains("kernel module nfs is missing", StringComparison.OrdinalIgnoreCase)
+                                   || ex.ToString().Contains("nfs module is not loaded", StringComparison.OrdinalIgnoreCase))
         {
             await _nfs!.DisposeAsync();
             return false;
