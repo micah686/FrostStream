@@ -18,13 +18,13 @@ internal static class ScheduledJobContextFactory
     {
         var scheduleKey = context.MergedJobDataMap.GetString(QuartzScheduleFactory.ScheduleKeyData);
         var taskType = context.MergedJobDataMap.GetString(QuartzScheduleFactory.TaskTypeData);
-        var retentionDays = context.MergedJobDataMap.GetInt(QuartzScheduleFactory.RetentionDaysData);
-        var includeFailed = context.MergedJobDataMap.GetBoolean(QuartzScheduleFactory.IncludeFailedData);
-
         if (string.IsNullOrWhiteSpace(scheduleKey) || string.IsNullOrWhiteSpace(taskType))
         {
             throw new JobExecutionException("Quartz job data did not include schedule key and task type.");
         }
+
+        var retentionDays = context.MergedJobDataMap.GetInt(QuartzScheduleFactory.RetentionDaysData);
+        var includeFailed = context.MergedJobDataMap.GetBoolean(QuartzScheduleFactory.IncludeFailedData);
 
         var dueWindow = context.ScheduledFireTimeUtc is { } scheduledFireTime
             ? Instant.FromDateTimeOffset(scheduledFireTime.ToUniversalTime())

@@ -19,19 +19,25 @@ internal static class CrystalQuartzSetup
         var logger = app.Services.GetRequiredService<ILoggerFactory>()
             .CreateLogger("CrystalQuartz");
 
-        app.UseCrystalQuartz(
-            () => scheduler,
-            new CrystalQuartzOptions
-            {
-                Path = NormalizePath(dashboardOptions.Path),
-                ReadOnly = dashboardOptions.ReadOnly,
-                LazyInit = dashboardOptions.LazyInit,
-                TimelineSpan = TimeSpan.FromMinutes(Math.Max(1, dashboardOptions.TimelineSpanMinutes)),
-                OnUnhandledPanelException = ex => logger.LogError(ex, "Unhandled CrystalQuartz dashboard exception")
-            });
+        app.UseCrystalQuartz(CreateSchedulerProvider(scheduler), CreateOptions(dashboardOptions, logger));
 
         return app;
     }
+
+    internal static Func<IScheduler> CreateSchedulerProvider(IScheduler scheduler) => () => scheduler;
+
+    internal static CrystalQuartzOptions CreateOptions(QuartzDashboardOptions options, ILogger logger)
+        => new()
+        {
+            Path = NormalizePath(options.Path),
+            ReadOnly = options.ReadOnly,
+            LazyInit = options.LazyInit,
+            TimelineSpan = TimeSpan.FromMinutes(Math.Max(1, options.TimelineSpanMinutes)),
+            OnUnhandledPanelException = CreatePanelExceptionHandler(logger)
+        };
+
+    internal static Action<Exception> CreatePanelExceptionHandler(ILogger logger)
+        => ex => logger.LogError(ex, "Unhandled CrystalQuartz dashboard exception");
 
     private static string NormalizePath(string? path)
     {
