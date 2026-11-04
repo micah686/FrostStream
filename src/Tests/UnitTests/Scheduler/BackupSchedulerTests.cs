@@ -65,6 +65,21 @@ public sealed class BackupSchedulerTests
         bus.Subjects.ShouldNotContain(ScheduleSubjects.MarkSuccess);
     }
 
+    [Test]
+    public async Task Unsupported_TaskType_Is_Marked_As_Failed()
+    {
+        var bus = new RecordingMessageBus();
+        var scheduler = NewScheduler(new FakeBackupServiceClient("completed", 1), bus);
+
+        await scheduler.QueueBackupAsync(Context("unsupported-task"), CancellationToken.None);
+
+        bus.Subjects.ShouldBe([
+            ScheduleSubjects.MarkAttempt,
+            NotificationSubjects.DispatchAdmin,
+            ScheduleSubjects.MarkFailure
+        ]);
+    }
+
     private static BackupScheduler NewScheduler(IBackupServiceClient client, IMessageBus bus)
         => new(client, bus, SystemClock.Instance, NullLogger<BackupScheduler>.Instance)
         {

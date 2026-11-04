@@ -12,8 +12,13 @@ public sealed class ScheduleHydrationService(
     IQuartzJobRegistrar registrar,
     ILogger<ScheduleHydrationService> logger) : BackgroundService
 {
+    internal Func<TimeSpan, CancellationToken, Task> DelayAsync { get; init; } = Task.Delay;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        => await HydrateAsync(stoppingToken);
+    {
+        await Task.Yield();
+        await HydrateAsync(stoppingToken);
+    }
 
     /// <summary>Registers the persisted definitions without starting Quartz.</summary>
     public async Task<bool> HydrateAsync(CancellationToken stoppingToken)
@@ -46,11 +51,14 @@ public sealed class ScheduleHydrationService(
             {
                 return await request();
             }
-            catch (Exception ex) when (attempt < 7 && !cancellationToken.IsCancellationRequested)
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 logger.LogWarning(ex, "Schedule request failed on attempt {Attempt}; retrying.", attempt);
-                await Task.Delay(delay, cancellationToken);
-                delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, 15000));
+                if (attempt < 7)
+                {
+                    await DelayAsync(delay, cancellationToken);
+                    delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, 15000));
+                }
             }
         }
 

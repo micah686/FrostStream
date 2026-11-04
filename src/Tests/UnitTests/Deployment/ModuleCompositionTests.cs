@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Shared.Deployment;
 using Shared.Messaging;
 using Shouldly;
@@ -86,6 +87,8 @@ public sealed class ModuleCompositionTests
         builder.AddFullMessaging();
         builder.AddSchedulerModule();
         await using var provider = builder.Services.BuildServiceProvider();
+        provider.GetRequiredService<IOptions<Quartz.QuartzHostedServiceOptions>>()
+            .Value.WaitForJobsToComplete.ShouldBeTrue();
         provider.GetRequiredService<Shared.Secrets.ISecretStore>().ShouldBeOfType<Shared.Secrets.OpenBaoSecretStore>();
         provider.GetRequiredService<Shared.Backups.IBackupServiceClient>().ShouldBeOfType<Shared.Backups.BackupServiceClient>();
         builder.Services.ShouldContain(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(Quartz.QuartzHostedService));
