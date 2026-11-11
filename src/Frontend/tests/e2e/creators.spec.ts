@@ -1,70 +1,45 @@
 import { test, expect } from '@playwright/test';
+import { mockApi } from './support/api';
 
-const creator = (id: number, name: string, platform: string) => ({
-  accountId: id, accountName: name, accountHandle: name.toLowerCase(), platform,
-  isVerified: id === 1, mediaCount: id, followerCount: 1200,
-  accountUrl: `https://example.com/${id}`, userNote: id === 1 ? 'A favorite creator' : null
-});
-
+const source = { id: 1, sourceUrl: 'https://youtube.com/@example/videos', configSetKey: null, scanEnabled: true, incrementalPageSize: 50, consecutiveKnownThreshold: 25, fullRescanIntervalDays: 30, updateCheckIntervalHours: 6, metadataRefreshWindow: 25, lastSuccessfulScanAt: null, lastFullScanAt: null, lastSeenHighWatermark: null, nextFullScanStartIndex: null, createdAt: '2025-01-01T00:00:00Z', lastUpdated: null };
 test.beforeEach(async ({ page }) => {
-  await page.route(url => url.pathname.startsWith('/api/'), async route => {
-    const url = new URL(route.request().url());
-    let body: unknown = {};
-    if (url.pathname === '/api/system/capabilities') body = { deploymentMode: 'Full', accessManagement: { enabled: true }, integrations: {}, backups: {} };
-    if (url.pathname === '/api/auth/me') body = { mode: 'multi-user', authenticated: true, profile: { name: 'Tester', initials: 'T', groups: [] } };
-    if (url.pathname === '/api/metadata/accounts') {
-      const filtered = url.searchParams.get('platform');
-      const after = url.searchParams.get('after');
-      body = filtered ? { items: [], nextCursor: null, hasMore: false }
-        : after ? { items: [creator(2, 'Bob', 'twitch')], nextCursor: null, hasMore: false }
-        : { items: [creator(1, 'Alice', 'youtube')], nextCursor: 'cursor-1', hasMore: true };
-    }
-    await route.fulfill({ json: body });
+  await mockApi(page, async (route, url) => {
+    const method = route.request().method();
+    if (url.pathname === '/api/creator-monitor') { await route.fulfill({ json: method === 'GET' ? [source] : { ...source, id: 2, ...route.request().postDataJSON() } }); return true; }
+    if (url.pathname === '/api/creator-monitor/1' && method === 'PUT') { await route.fulfill({ json: { ...source, ...route.request().postDataJSON() } }); return true; }
+    if (url.pathname === '/api/creator-monitor/1/ignored-media') { await route.fulfill({ json: [] }); return true; }
+    return false;
   });
 });
 
-test('shows creator details and navigates cursor pages', async ({ page }) => {
-  await page.goto('/library/creators');
-  await expect(page.getByRole('heading', { name: 'Creators', exact: true })).toBeVisible();
-  await expect(page.getByText('1 creator on this page')).toBeVisible();
-  await expect(page.getByText('@alice')).toBeVisible();
-  await expect(page.getByTitle('Verified')).toBeVisible();
-  await expect(page.getByText('A favorite creator')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'View channel' })).toHaveAttribute('href', '/channel/1');
-  await expect(page.getByRole('link', { name: 'Source' })).toHaveAttribute('href', 'https://example.com/1');
-  const request = page.waitForRequest(request => new URL(request.url()).searchParams.get('after') === 'cursor-1');
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await request;
-  await expect(page.getByText('Page 2', { exact: true })).toBeVisible();
-  await expect(page.getByText('@bob')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Previous', exact: true }).click();
-  await expect(page.getByText('@alice')).toBeVisible();
+test('shows tracked creators and can pause scanning and inspect ignored videos', async ({ page }) => {
+  await page.goto('/creators');
+  await expect(page.getByRole('heading', { name: '@example' })).toBeVisible();
+  await expect(page.getByText('SCANNING', { exact: true })).toBeVisible();
+  const update = page.waitForRequest(r => new URL(r.url()).pathname === '/api/creator-monitor/1' && r.method() === 'PUT');
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  expect((await update).postDataJSON()).toMatchObject({ scanEnabled: false });
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show ignored videos' }).click();
+  await expect(page.getByText('No videos have been suppressed by ignore keywords for this creator.')).toBeVisible();
 });
 
-test('applies and clears a platform filter and refreshes', async ({ page }) => {
-  await page.goto('/library/creators');
-  await expect(page.getByText('@alice')).toBeVisible();
-  await page.getByLabel('Platform').fill('  twitch  ');
-  const request = page.waitForRequest(request => new URL(request.url()).searchParams.get('platform') === 'twitch');
-  await page.getByRole('button', { name: 'Apply' }).click();
-  await request;
-  await expect(page.getByText('No creators found')).toBeVisible();
-  await expect(page.getByText('filtered to twitch')).toBeVisible();
-  await page.getByRole('button', { name: 'Clear' }).click();
-  await expect(page.getByLabel('Platform')).toHaveValue('');
-  await expect(page.getByText('@alice')).toBeVisible();
-  const refresh = page.waitForRequest(request => new URL(request.url()).pathname === '/api/metadata/accounts');
-  await page.getByRole('button', { name: 'Refresh' }).click();
-  await refresh;
-  await expect(page.getByText('@alice')).toBeVisible();
+test('tracks a new creator and edits scan settings', async ({ page }) => {
+  await page.goto('/creators');
+  await page.getByRole('button', { name: 'Track creator', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Channel URL').fill('https://youtube.com/@new/videos');
+  await dialog.getByLabel('Incremental page size').fill('100');
+  const create = page.waitForRequest(r => new URL(r.url()).pathname === '/api/creator-monitor' && r.method() === 'POST');
+  await dialog.getByRole('button', { name: 'Track creator' }).click();
+  expect((await create).postDataJSON()).toMatchObject({ sourceUrl: 'https://youtube.com/@new/videos', incrementalPageSize: 100, scanEnabled: true });
+  await expect(page.getByRole('heading', { name: '@new' })).toBeVisible();
+  await page.locator('li').filter({ has: page.getByRole('heading', { name: '@example' }) }).getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Channel URL')).toHaveValue(source.sourceUrl);
 });
 
-test('shows a failed request and can recover by refreshing', async ({ page }) => {
-  await page.route('**/api/metadata/accounts?**', route => route.fulfill({ status: 500, body: 'Accounts unavailable' }));
-  await page.goto('/library/creators');
-  await expect(page.getByRole('alert')).toContainText('Accounts unavailable');
-  await page.unroute('**/api/metadata/accounts?**');
-  await page.getByRole('button', { name: 'Refresh' }).click();
-  await expect(page.getByText('@alice')).toBeVisible();
+test('reports failed creator loading', async ({ page }) => {
+  await page.route(url => url.pathname === '/api/creator-monitor', route => route.fulfill({ status: 503, body: 'Creators unavailable' }));
+  await page.goto('/creators');
+  await expect(page.getByRole('alert')).toContainText('Creators unavailable');
 });

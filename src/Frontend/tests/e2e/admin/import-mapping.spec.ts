@@ -1,0 +1,5 @@
+import { test, expect } from '@playwright/test';
+import { adminApi } from '../support/admin';
+test.beforeEach(async ({ page }) => adminApi(page));
+test('lists files that need manual mapping', async ({ page }) => { await page.goto('/admin/import/session-1/mapping'); await expect(page.getByRole('heading', { name: /Available for manual mapping/ })).toContainText('1'); await expect(page.getByText('video.mp4', { exact: true })).toBeVisible(); await expect(page.getByRole('link', { name: 'Download example JSON' })).toHaveAttribute('href', /mapping-example$/); });
+test('uploads a mapping and reports the result', async ({ page }) => { await page.route(url => url.pathname === '/api/global/imports/sessions/session-1/mapping', route => route.fulfill({ json: { success: true, matchedCount: 1, unmatchedCount: 0 } })); await page.goto('/admin/import/session-1/mapping'); await page.locator('input[type=file]').setInputFiles({ name: 'mapping.json', mimeType: 'application/json', buffer: Buffer.from('{}') }); await expect(page.getByText('Manual mapping applied to 1 file.')).toBeVisible(); });

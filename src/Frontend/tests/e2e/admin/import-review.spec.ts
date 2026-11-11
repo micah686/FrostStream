@@ -1,0 +1,5 @@
+import { test, expect } from '@playwright/test';
+import { adminApi, session } from '../support/admin';
+test.beforeEach(async ({ page }) => adminApi(page));
+test('reviews selected files and metadata', async ({ page }) => { await page.goto('/admin/import/session-1/review'); await expect(page.getByText('Video title')).toBeVisible(); await expect(page.getByText('Placeholder', { exact: true })).toBeVisible(); await expect(page.getByRole('link', { name: 'Next: import' })).toHaveAttribute('href', '/admin/import/session-1/run'); });
+test('warns when source deletion is enabled', async ({ page }) => { await page.route(url => url.pathname === '/api/global/imports/sessions/session-1', route => route.fulfill({ json: { ...session, deleteSourceFiles: true } })); await page.goto('/admin/import/session-1/review'); await expect(page.getByText('Source files will be deleted')).toBeVisible(); await expect(page.getByRole('link', { name: 'file selection' })).toHaveAttribute('href', '/admin/import/session-1/files'); });
