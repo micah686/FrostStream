@@ -22,7 +22,8 @@
     type ScheduledTask
   } from '#lib/api/schedules.js';
 
-  let { editKey = null } = $props<{ editKey?: string | null }>();
+  interface Props { editKey?: string | null }
+  let { editKey = null }: Props = $props();
   const editOnly = $derived(editKey !== null);
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';

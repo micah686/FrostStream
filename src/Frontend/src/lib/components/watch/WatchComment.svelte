@@ -10,7 +10,7 @@
   import { accentFor, formatCount, formatRelativeDate, initialsFor } from '#lib/media.js';
   import WatchComment from './WatchComment.svelte';
 
-  export interface WatchCommentNode {
+  interface WatchCommentNode {
     commentId: string;
     parentCommentId?: string | null;
     text: string;
@@ -29,7 +29,8 @@
     replies: WatchCommentNode[];
   }
 
-  let { comment, depth = 0 } = $props<{ comment: WatchCommentNode; depth?: number }>();
+  interface Props { comment: WatchCommentNode; depth?: number }
+  let { comment, depth = 0 }: Props = $props();
 
   let expanded = $state(false);
 
