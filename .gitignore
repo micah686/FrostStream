@@ -11,3 +11,12 @@ Full/AppHost/configs/nats/certs/
 data/
 .artifacts/
 .idea/
+
+
+
+src/Full/AppHost/configs/nats/certs/*
+*.pem
+*.crt
+# Per-edition AppHost development data
+/lite-data/
+/full-data/
