@@ -89,7 +89,7 @@ static string ResolveStorageRoot(IDistributedApplicationBuilder builder)
 {
     var configured = Environment.GetEnvironmentVariable("FROSTSTREAM_STORAGE_ROOT");
     var root = string.IsNullOrWhiteSpace(configured)
-        ? Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "data"))
+        ? Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "full-data"))
         : configured;
 
     if (!Path.IsPathRooted(root))
