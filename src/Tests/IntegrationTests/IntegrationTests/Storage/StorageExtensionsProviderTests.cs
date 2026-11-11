@@ -301,7 +301,7 @@ internal sealed class StorageProtocolContainerFixture : IAsyncDisposable
                 var reportDirectory = Path.GetFullPath(Path.Combine(reportRoot, "storage-containerized", protocol));
                 Directory.CreateDirectory(reportDirectory);
 
-                var runner = new ContainerBuilder("mcr.microsoft.com/dotnet/aspnet:10.0")
+                var runner = new ContainerBuilder("mcr.microsoft.com/dotnet/aspnet:11.0")
                     .WithNetwork(network)
                     .WithBindMount(outputDirectory, "/tests")
                     .WithBindMount(reportDirectory, "/reports")

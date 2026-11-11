@@ -1,5 +1,5 @@
 # Build from src/: docker build -f Lite/Backend/Dockerfile -t froststream/lite .
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY Directory.Packages.props Directory.Build.props ./
 COPY Shared/Contracts/ Shared/Contracts/
@@ -17,7 +17,7 @@ COPY Lite/Infrastructure/ Lite/Infrastructure/
 COPY Lite/Backend/ Lite/Backend/
 RUN dotnet publish Lite/Backend/Lite.csproj -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 # Provision the complete runtime toolset at image build time. Startup's SkipExisting
 # check finds these files before the scheduled refresh checks for newer releases.
 # Must match StartPotProvider and YtDlpBinaryDownloaderOptions.

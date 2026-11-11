@@ -1,7 +1,7 @@
 # FrostStream Scheduler (Quartz; serves the /quartz dashboard).
 # Build from the src/ directory:  docker build -f Full/Hosts/Scheduler/Dockerfile -t froststream/scheduler .
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props Directory.Build.props ./
@@ -26,7 +26,7 @@ COPY Shared/Modules/Scheduler/ Shared/Modules/Scheduler/
 COPY Full/Hosts/Scheduler/ Full/Hosts/Scheduler/
 RUN dotnet publish Full/Hosts/Scheduler/SchedulerHost.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app .
 
