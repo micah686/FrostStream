@@ -105,8 +105,8 @@
   }
 
   // A numeric bound token, e.g. duration:>=600. Ignores non-numeric input.
-  function rangeToken(prefix: string, op: string, value: string): string | null {
-    const trimmed = value.trim();
+  function rangeToken(prefix: string, op: string, value: string | number | undefined): string | null {
+    const trimmed = String(value ?? '').trim();
     if (!trimmed || !/^\d+$/.test(trimmed)) return null;
     return `${prefix}:${op}${trimmed}`;
   }
