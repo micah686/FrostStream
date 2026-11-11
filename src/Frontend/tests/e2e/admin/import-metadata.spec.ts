@@ -1,0 +1,5 @@
+import { test, expect } from '@playwright/test';
+import { adminApi } from '../support/admin';
+test.beforeEach(async ({ page }) => adminApi(page));
+test('requires a source URL before fetching metadata', async ({ page }) => { await page.goto('/admin/import/session-1/metadata'); await expect(page.getByText('video.mp4', { exact: true })).toBeVisible(); await page.getByRole('button', { name: 'Fetch metadata' }).click(); await expect(page.getByText('Add at least one source URL that has not already fetched metadata.')).toBeVisible(); });
+test('queues metadata for a selected file', async ({ page }) => { await page.goto('/admin/import/session-1/metadata'); await page.getByPlaceholder('https://…').fill('https://example.com/video'); const request = page.waitForRequest(r => r.url().endsWith('/enrich') && r.method() === 'POST'); await page.getByRole('button', { name: 'Fetch metadata' }).click(); expect((await request).postDataJSON()).toMatchObject({ itemIds: ['item-1'], options: { sleepBetweenRequestsSeconds: 3 } }); await expect(page.getByText('1 metadata fetch queued.')).toBeVisible(); });

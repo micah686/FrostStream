@@ -1,0 +1,6 @@
+import { test, expect } from '@playwright/test';
+import { adminApi } from '../support/admin';
+const policy = { policyId: 'p-1', name: 'family', description: 'Family rules', enabled: true, syncStatus: 'Synced', version: 1, bundleIds: [], mediaGuids: [], providers: [], ageThresholds: [], assignments: [], createdAt: '2025-01-01T00:00:00Z', updatedAt: '2025-01-01T00:00:00Z' };
+test.beforeEach(async ({ page }) => adminApi(page, async (route, url) => { if (url.pathname === '/api/global/access-control/policies') { await route.fulfill({ json: [policy] }); return true; } return false; }));
+test('redirects to the selected policy editor', async ({ page }) => { await page.goto('/admin/access-control/policies/p-1/edit'); await expect(page).toHaveURL(/view=edit-policy.*policyId=p-1/); await expect(page.getByRole('heading', { name: 'Edit policy' })).toBeVisible(); });
+test('loads immutable name and editable description', async ({ page }) => { await page.goto('/admin/access-control/policies/p-1/edit'); await expect(page.getByPlaceholder('family-viewing')).toHaveValue('family'); await expect(page.getByPlaceholder('family-viewing')).toBeDisabled(); await expect(page.getByPlaceholder('What this policy grants and restricts')).toHaveValue('Family rules'); });

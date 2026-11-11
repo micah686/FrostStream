@@ -1,0 +1,5 @@
+import { test, expect } from '@playwright/test';
+import { adminApi, schedule } from '../support/admin';
+test.beforeEach(async ({ page }) => adminApi(page));
+test('loads the selected schedule for editing', async ({ page }) => { await page.goto('/admin/schedules/nightly'); await expect(page.getByRole('heading', { name: 'Edit schedule "nightly"', level: 2 })).toBeVisible(); await expect(page.getByLabel('Timezone')).toHaveValue('UTC'); });
+test('saves changes to the selected schedule', async ({ page }) => { await page.route(url => url.pathname === '/api/global/schedules/nightly', route => route.fulfill({ json: { ...schedule, timezone: 'America/Los_Angeles' } })); await page.goto('/admin/schedules/nightly'); await page.getByLabel('Timezone').fill('America/Los_Angeles'); const request = page.waitForRequest(r => new URL(r.url()).pathname === '/api/global/schedules/nightly' && r.method() === 'PUT'); await page.locator('form').getByRole('button', { name: /Save/ }).click(); expect((await request).postDataJSON()).toMatchObject({ timezone: 'America/Los_Angeles' }); });
