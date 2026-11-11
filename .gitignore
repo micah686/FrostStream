@@ -9,5 +9,14 @@ Full/AppHost/configs/nats/certs/
 **/__pycache__/
 
 data/
+src/lite-data/
+src/full-data/
 .artifacts/
 .idea/
+
+
+
+src/Full/AppHost/configs/nats/certs/*
+*.pem
+*.crt
+

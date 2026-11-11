@@ -21,7 +21,7 @@ Shared contracts, core, persistence and application modules implement product be
 
 Prerequisites: .NET 10, Node 22 or newer, pnpm 10.28.1, Python 3, FFmpeg/FFprobe and a Docker-compatible engine. Package generation also needs Aspire CLI 13.4.6 and `python3 -m pip install -r tooling/installation/requirements.txt`. For rootless Podman, configure `DOCKER_HOST` for its API socket and `TESTCONTAINERS_RYUK_DISABLED=true`. Full installation checks require Docker Compose with working completed-job dependencies.
 
-AppHost development data is stored in the visible `data/` folder at the checkout root. Lite keeps downloads under `data/archives/`, incoming imports under `data/incoming/`, and its Lucene index under `data/search-index/`; packaged installs use their own local `data/` directory.
+AppHost development data is stored in separate visible folders at the checkout root: Lite uses `lite-data/` (including downloads in `lite-data/archives/`, incoming imports in `lite-data/incoming/`, and its Lucene index in `lite-data/search-index/`), while Full uses `full-data/`. Set `FROSTSTREAM_STORAGE_ROOT` to override either default. Packaged installs use their own local data directory.
 
 ```sh
 dotnet build FrostStream.slnx -m:1

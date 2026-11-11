@@ -27,7 +27,7 @@ public static class StartOpenBao
         IResourceBuilder<ParameterResource> token)
     {
         var config = Path.Combine(builder.AppHostDirectory, "configs", "openbao", "openbao.hcl");
-        var bootstrapRoot = OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot);
+        var bootstrapRoot = OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot, builder.AppHostDirectory);
 
         var server = builder
             .AddContainer("openbao", "openbao/openbao", "2.5.5")
