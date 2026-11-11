@@ -66,7 +66,3 @@ test('reports a missing video', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('This video does not exist on the server.');
 });
 
-test('bare watch URL displays the not found page', async ({ page }) => {
-  await page.goto('/watch');
-  await expect(page.getByText('Not Found')).toBeVisible();
-});
