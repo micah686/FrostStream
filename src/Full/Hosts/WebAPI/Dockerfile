@@ -3,7 +3,7 @@
 #
 # Backups are executed by the dedicated BackupService image.
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props Directory.Build.props ./
@@ -30,7 +30,7 @@ COPY Shared/Modules/Api/ Shared/Modules/Api/
 COPY Full/Hosts/WebAPI/ Full/Hosts/WebAPI/
 RUN dotnet publish Full/Hosts/WebAPI/WebAPIHost.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app .
 

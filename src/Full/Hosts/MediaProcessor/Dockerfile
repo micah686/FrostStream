@@ -1,7 +1,7 @@
 # FrostStream MediaProcessor.
 # Build from the src/ directory:  docker build -f Full/Hosts/MediaProcessor/Dockerfile -t froststream/mediaprocessor .
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props Directory.Build.props ./
@@ -26,7 +26,7 @@ COPY Shared/Modules/MediaProcessor/ Shared/Modules/MediaProcessor/
 COPY Full/Hosts/MediaProcessor/ Full/Hosts/MediaProcessor/
 RUN dotnet publish Full/Hosts/MediaProcessor/MediaProcessorHost.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 # ffmpeg/ffprobe drive every rendition encode.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \

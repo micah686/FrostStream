@@ -5,7 +5,7 @@
 # so the image only needs CA certificates (present in the base image) and a writable tool
 # directory; no python or distro ffmpeg required.
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props Directory.Build.props ./
@@ -30,7 +30,7 @@ COPY Shared/Modules/Worker/ Shared/Modules/Worker/
 COPY Full/Hosts/Worker/ Full/Hosts/Worker/
 RUN dotnet publish Full/Hosts/Worker/WorkerHost.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app .
 

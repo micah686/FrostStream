@@ -1,5 +1,5 @@
 # Build from the repository root: docker build -f src/Full/Hosts/BackupService/Dockerfile .
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Packages.props ./
@@ -28,7 +28,7 @@ RUN dotnet publish src/Full/Hosts/BackupService/BackupService.csproj -c Release 
 # version-matched with the server (deep verify starts a throwaway postgres from the restored
 # files). Copy the ASP.NET runtime into that Debian image rather than relying on the
 # distribution's potentially older packages.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS dotnet-runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS dotnet-runtime
 FROM docker.io/library/postgres:18.3
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl pgbackrest \
