@@ -951,7 +951,7 @@
               aria-label={`Play ${card.title}`}
             >
               <span
-                class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-white/15"
+                class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-base-content/30"
               >
                 {initialsFor(account.accountName)}
               </span>
@@ -967,7 +967,7 @@
               {/if}
               {#if formatDuration(card.durationSeconds)}
                 <span
-                  class="absolute bottom-3 right-3 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                  class="absolute bottom-3 right-3 rounded bg-neutral px-1.5 py-0.5 text-[10px] font-semibold text-neutral-content"
                 >
                   {formatDuration(card.durationSeconds)}
                 </span>

@@ -21,6 +21,7 @@ export type DownloadStage =
   | 'InfoJsonUpload'
   | 'ThumbnailUpload'
   | 'CaptionUpload'
+  | 'LiveChatUpload'
   | 'RichMetadataWrite'
   | 'Finalize'
   | 'Cleanup'

@@ -5,12 +5,14 @@
     ChevronLeft,
     ChevronRight,
     CircleAlert,
-    CircleCheck,
+    Folder,
+    Search,
     RefreshCw,
     Server,
     Trash2
   } from '@lucide/svelte';
   import {
+    fetchQueue,
     cleanupHistory,
     clearProviderCircuit,
     setPriority,
@@ -24,7 +26,7 @@
   import { listOptionPresets } from '#lib/api/optionPresets.js';
   import JobRow from '#lib/components/jobs/JobRow.svelte';
 
-  type FilterKey = 'all' | 'active' | 'queued' | 'failed' | 'done' | 'stopped';
+  type FilterKey = 'working' | 'active' | 'queued' | 'done' | 'failed' | 'stopped' | 'all';
   type SourceFilterKey = 'all' | 'Direct' | 'Playlist' | 'Channel';
 
   const queue = createDownloadQueueStore();
@@ -36,7 +38,12 @@
     loading: true,
     error: null
   });
-  let activeFilter = $state<FilterKey>('all');
+  let view = $state<'jobs' | 'collections'>('jobs');
+  let selectedCollection = $state<string | null>(null);
+  let collectionRows = $state<QueueRow[]>([]);
+  let collectionsLoading = $state(false);
+  let collectionController: AbortController | undefined;
+  let activeFilter = $state<FilterKey>('working');
   let sourceFilter = $state<SourceFilterKey>('all');
   let query = $state('');
   let pageSize = $state(50);
@@ -45,7 +52,6 @@
   let cursorStack = $state<string[]>([]);
   let actionBusy = $state<Record<string, string>>({});
   let actionError = $state<string | null>(null);
-  let now = $state(Date.now());
   let optionPresetsByKey = $state<Map<string, string>>(new Map());
   let searchTimer: number | undefined;
 
@@ -75,21 +81,95 @@
     { key: 'Channel', label: 'Channels' }
   ];
 
-  const tabs = $derived([
-    { key: 'all' as const, label: 'All', count: activeFilter === 'all' ? queueState.totalCount : null },
-    { key: 'active' as const, label: 'Active', count: queueState.rows.filter((row) => isActive(row.job.status)).length },
-    { key: 'queued' as const, label: 'Queued', count: queueState.rows.filter((row) => isQueued(row.job.status)).length },
-    { key: 'failed' as const, label: 'Failed', count: queueState.rows.filter((row) => isFailed(row.job.status)).length },
-    { key: 'done' as const, label: 'Done', count: queueState.rows.filter((row) => isDone(row.job.status)).length },
-    {
-      key: 'stopped' as const,
-      label: 'Stopped',
-      count: queueState.rows.filter((row) => isStopped(row.job.status)).length
+  const liveCollectionRows = $derived.by(() => {
+    const live = new Map(queueState.rows.map(row => [row.job.jobId, row]));
+    return collectionRows.map(row => {
+      const latest = live.get(row.job.jobId);
+      return latest && Date.parse(latest.job.updatedAt) >= Date.parse(row.job.updatedAt) ? latest : row;
+    });
+  });
+  const scopedRows = $derived(selectedCollection
+    ? liveCollectionRows.filter(row => row.job.correlationId === selectedCollection)
+    : queueState.rows);
+  const tabs = $derived(([
+    ['working', 'Working', (status: string) => isActive(status) || isQueued(status)],
+    ['active', 'Active', isActive], ['queued', 'Queued', isQueued], ['done', 'Done', isDone],
+    ['failed', 'Failed', isFailed], ['stopped', 'Stopped', isStopped], ['all', 'All', () => true]
+  ] as const).map(([key, label, matches]) => ({ key, label, count: selectedCollection || activeFilter === 'all' || activeFilter === 'working' ? scopedRows.filter(row => matches(row.job.status)).length : activeFilter === key ? queueState.totalCount : null })));
+  const collections = $derived.by(() => {
+    const groups = new Map<string, QueueRow[]>();
+    for (const row of liveCollectionRows) {
+      if (!['playlist', 'channel'].includes(row.job.sourceKind.toLowerCase())) continue;
+      const group = groups.get(row.job.correlationId) ?? [];
+      group.push(row);
+      groups.set(row.job.correlationId, group);
     }
-  ]);
+    return [...groups].map(([id, rows]) => ({ id, rows, kind: rows[0].job.sourceKind,
+      name: `${rows[0].job.sourceKind} collection · ${id.split('-')[0]}`,
+      done: rows.filter(row => isDone(row.job.status)).length,
+      active: rows.filter(row => isActive(row.job.status)).length,
+      queued: rows.filter(row => isQueued(row.job.status)).length,
+      failed: rows.filter(row => isFailed(row.job.status)).length
+    }));
+  });
+  const selectedGroup = $derived(collections.find(group => group.id === selectedCollection));
+  const visibleCollections = $derived(collections.filter(group => `${group.name} ${group.rows.map(row => row.job.sourceUrl).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
+  const collectionMatches = $derived(scopedRows.filter(row => {
+    const matches = { working: (status: string) => isActive(status) || isQueued(status), active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped, all: () => true }[activeFilter];
+    return matches(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
+  }));
+  const visibleRows = $derived(selectedCollection ? collectionMatches.slice((page - 1) * pageSize, page * pageSize) : queueState.rows.filter(row => activeFilter === 'all' || (activeFilter === 'working' ? isActive(row.job.status) || isQueued(row.job.status) : ({ active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped }[activeFilter])(row.job.status))));
+  const matchingCount = $derived(selectedCollection ? collectionMatches.length : activeFilter === 'all' ? queueState.totalCount : queueState.rows.length);
+  const hasNext = $derived(selectedCollection ? page * pageSize < matchingCount : Boolean(queueState.nextCursor));
 
-  const activeCount = $derived(queueState.rows.filter((row) => isActive(row.job.status)).length);
-  const queuedCount = $derived(queueState.rows.filter((row) => isQueued(row.job.status)).length);
+  $effect(() => {
+    if (selectedCollection) page = Math.min(page, Math.max(1, Math.ceil(matchingCount / pageSize)));
+  });
+
+  async function loadCollections() {
+    collectionController?.abort();
+    const controller = new AbortController();
+    collectionController = controller;
+    collectionsLoading = true;
+    actionError = null;
+    try {
+      const rows: QueueRow[] = [];
+      let next: string | undefined;
+      do {
+        const response = await fetchQueue({ limit: 200, sort: 'createdAt', cursor: next }, (input, init) => fetch(input, { ...init, signal: controller.signal }));
+        rows.push(...response.items.map(job => ({ job })));
+        next = response.nextCursor ?? undefined;
+      } while (next && !controller.signal.aborted);
+      if (!controller.signal.aborted) collectionRows = rows;
+    } catch (err) {
+      if (!controller.signal.aborted) actionError = err instanceof Error ? err.message : 'Could not load collections.';
+    } finally {
+      if (!controller.signal.aborted) collectionsLoading = false;
+    }
+  }
+
+  async function changeView(next: 'jobs' | 'collections') {
+    view = next;
+    selectedCollection = null;
+    query = '';
+    activeFilter = 'working';
+    sourceFilter = 'all';
+    resetPaging();
+    if (searchTimer) window.clearTimeout(searchTimer);
+    if (next === 'collections') await loadCollections();
+    else await applyQueueParams();
+  }
+
+  async function openCollection(id: string) {
+    if (!collectionRows.some(row => row.job.correlationId === id)) await loadCollections();
+    selectedCollection = id;
+    view = 'jobs';
+    query = '';
+    activeFilter = 'working';
+    sourceFilter = 'all';
+    resetPaging();
+  }
+
   onMount(() => {
     queue.connect();
     listOptionPresets()
@@ -97,19 +177,16 @@
         optionPresetsByKey = new Map(presets.map((preset) => [preset.key, preset.name]));
       })
       .catch(() => {});
-    const timer = window.setInterval(() => {
-      now = Date.now();
-    }, 1000);
     // Resync when the tab wakes up: state changes that fired while the SSE
     // connection was dead (e.g. laptop sleep) are live-only and never replayed.
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        void queue.refresh().catch(() => {});
+        if (view === 'collections' || selectedCollection) void loadCollections();
+        else void queue.refresh().catch(() => {});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
       if (searchTimer) {
         window.clearTimeout(searchTimer);
@@ -118,6 +195,7 @@
   });
 
   onDestroy(() => {
+    collectionController?.abort();
     queue.disconnect();
     unsubscribe();
   });
@@ -125,15 +203,17 @@
   async function refreshQueue() {
     actionError = null;
     try {
-      await queue.refresh();
+      if (view === 'collections' || selectedCollection) await loadCollections();
+      else await queue.refresh();
     } catch (err) {
       actionError = err instanceof Error ? err.message : 'Could not refresh the queue.';
     }
   }
 
   async function applyQueueParams() {
+    if (selectedCollection || view === 'collections') return;
     await queue.setParams({
-      stateGroup: activeFilter,
+      stateGroup: activeFilter === 'working' ? 'all' : activeFilter,
       sourceKind: sourceFilter === 'all' ? undefined : sourceFilter,
       q: query.trim() || undefined,
       limit: pageSize,
@@ -183,6 +263,7 @@
   }
 
   async function nextPage(): Promise<void> {
+    if (selectedCollection) { if (hasNext) page += 1; return; }
     if (!queueState.nextCursor) {
       return;
     }
@@ -193,6 +274,7 @@
   }
 
   async function previousPage(): Promise<void> {
+    if (selectedCollection) { page = Math.max(1, page - 1); return; }
     if (page <= 1) {
       return;
     }
@@ -307,7 +389,8 @@
     actionBusy = { ...actionBusy, [jobId]: action };
     try {
       await fn();
-      await applyQueueParams();
+      if (selectedCollection) await loadCollections();
+      else await applyQueueParams();
     } catch (err) {
       actionError = err instanceof Error ? err.message : `Could not ${action} the job.`;
     } finally {
@@ -321,163 +404,96 @@
   <title>Downloads · Jobs · FrostStream</title>
 </svelte:head>
 
-<div aria-labelledby="downloads-title">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 id="downloads-title" class="text-lg font-semibold tracking-tight text-base-content">Downloads</h2>
-      <p class="mt-1 text-sm text-base-content/50">
-        Download queue · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
-      </p>
+<section class="overflow-hidden rounded-lg border border-base-300 bg-base-200/40" aria-labelledby="downloads-title">
+  <header class="flex flex-wrap items-center gap-3 px-5 pt-5">
+    <h2 id="downloads-title" class="text-xl font-semibold tracking-tight">Downloads</h2>
+    <span class={['inline-flex items-center gap-1.5 text-xs', queueState.connected ? 'text-success' : 'text-base-content/50']} role="status">
+      <span class={['h-1.5 w-1.5 rounded-full', queueState.connected ? 'bg-success' : 'bg-base-content/30']}></span>
+      {queueState.connected ? 'Live' : 'Reconnecting'}
+    </span>
+    <div class="ml-auto flex gap-2">
+      <button class="btn btn-sm btn-primary text-xs" onclick={refreshQueue} disabled={queueState.loading || collectionsLoading}><RefreshCw class="h-3.5 w-3.5" />Refresh</button>
+      <button class="btn btn-sm btn-primary text-xs" onclick={openCleanup}><Trash2 class="h-3.5 w-3.5" />Clean up</button>
     </div>
-
-    <div class="flex flex-wrap items-center gap-2">
-      {#if queueState.connected}
-        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
-      {/if}
-      <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
-        {#if queueState.loading}
-          <span class="loading loading-spinner loading-xs mr-1.5"></span>
-        {:else}
-          <RefreshCw class="mr-1.5 h-4 w-4" />
-        {/if}
-        Refresh
-      </button>
-      <button class="btn btn-sm btn-neutral text-xs" onclick={openCleanup}>
-        <Trash2 class="mr-1.5 h-4 w-4" />
-        Clean up
-      </button>
-    </div>
-  </div>
-
-  {#if cleanupNotice}
-    <div
-      class="mt-5 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-box border-[length:var(--border)] border-info/30 bg-info/10 p-4 text-sm text-info"
-      role="status"
-    >
-      <span>{cleanupNotice}</span>
-      <a class="link font-semibold" href="/jobs/background">View background jobs</a>
-    </div>
-  {/if}
-
-  <div class="mt-6 grid gap-3 md:grid-cols-3">
-    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
-      <div class="stat-title">Tracked</div>
-      <div class="stat-value text-2xl">{queueState.totalCount}</div>
-      <div class="stat-desc">{queueState.rows.length} loaded</div>
-    </div>
-    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
-      <div class="stat-title">Running</div>
-      <div class="stat-value text-2xl">{activeCount}</div>
-      <div class="stat-desc">active workflow states</div>
-    </div>
-    <div class="stat rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 shadow">
-      <div class="stat-title">Waiting</div>
-      <div class="stat-value text-2xl">{queuedCount}</div>
-      <div class="stat-desc">not yet dispatched</div>
-    </div>
-  </div>
-
-  <div class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="Job source filters">
-    {#each sourceTabs as tab}
-      <button
-        type="button"
-        onclick={() => changeSourceFilter(tab.key)}
-        class={['btn btn-sm shrink-0 text-xs', sourceFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
-        aria-pressed={sourceFilter === tab.key}
-      >
-        {tab.label}
-      </button>
-    {/each}
-  </div>
-
-  <div class="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Job filters">
-      {#each tabs as tab}
-        <button
-          type="button"
-          onclick={() => changeFilter(tab.key)}
-          class={['btn btn-sm shrink-0 gap-2 text-xs', activeFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
-          aria-current={activeFilter === tab.key ? 'page' : undefined}
-        >
-          {tab.label}
-          {#if tab.count !== null}
-            <span
-              class={[
-                'rounded-full px-1.5 py-0.5 text-[10px]',
-                activeFilter === tab.key
-                  ? 'bg-primary-content/20 text-primary-content'
-                  : 'bg-base-200 text-base-content/60'
-              ]}
-            >
-              {tab.count}
-            </span>
-          {/if}
-        </button>
-      {/each}
-    </div>
-
-    <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="w-full text-sm sm:w-40" />
-      <input class="input w-full text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search jobs" placeholder="Search source, job id, storage..." />
-    </div>
-  </div>
-
-  {#if queueState.error || actionError}
-    <div
-      class="alert alert-error mt-5 text-sm"
-      role="alert"
-    >
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{actionError ?? queueState.error}</span>
-    </div>
-  {/if}
-
-  {#if queueState.loading && queueState.rows.length === 0}
-    <div class="mt-16 flex justify-center">
-      <span class="loading loading-spinner loading-md"></span>
-    </div>
-  {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
-      <Server class="mx-auto h-10 w-10 text-base-content/30" />
-      <p class="mt-4 text-sm font-semibold text-base-content/80">No jobs match this view</p>
-      <p class="mt-1 text-sm text-base-content/50">Queue a download or change the filters.</p>
-    </div>
-  {:else}
-    <div class="mt-5 space-y-2">
-      {#each queueState.rows as row (row.job.jobId)}
-        <JobRow
-          {row}
-          {now}
-          {optionPresetsByKey}
-          busyAction={actionBusy[row.job.jobId]}
-          onstop={stopDownload}
-          onstart={startDownload}
-          onclearprovider={clearDownloadProvider}
-          ongroupstop={stopDownloadGroup}
-          ongroupstart={startDownloadGroup}
-          onpriority={updatePriority}
-        />
-      {/each}
-    </div>
-
-    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p class="text-xs text-base-content/40">
-        Showing {Math.min((page - 1) * pageSize + 1, queueState.totalCount)}-{Math.min(page * pageSize, queueState.totalCount)}
-        of {queueState.totalCount}
-      </p>
-      <div class="flex gap-2">
-        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
-          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
-          Previous
-        </button>
-        <button class="btn btn-sm btn-neutral text-xs" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
-          Next
-          <ChevronRight class="ml-1 h-3.5 w-3.5" />
-        </button>
+  </header>
+  <nav class="tabs tabs-border mt-2 border-b border-base-300 px-5" aria-label="Download views">
+    <button class={['tab px-0 mr-6 text-sm', view === 'jobs' && !selectedCollection && 'tab-active']} aria-pressed={view === 'jobs' && !selectedCollection} onclick={() => changeView('jobs')}>All jobs</button>
+    <button class={['tab px-0 text-sm', view === 'collections' && 'tab-active']} aria-pressed={view === 'collections'} onclick={() => changeView('collections')}>Collections</button>
+  </nav>
+  <div class="p-3.5 sm:p-5">
+    {#if cleanupNotice}
+      <div class="alert alert-info mb-4 text-sm" role="status"><span>{cleanupNotice} <a class="link" href="/jobs/background">View background jobs</a></span></div>
+    {/if}
+    {#if selectedGroup}
+      <nav class="mb-3 flex flex-wrap gap-2 text-xs text-base-content/55" aria-label="Breadcrumb">
+        <button class="link" onclick={() => changeView('jobs')}>All jobs</button><span>/</span><button class="link" onclick={() => changeView('collections')}>Collections</button><span>/</span><span>{selectedGroup.name}</span>
+      </nav>
+      <h3 class="text-lg font-semibold">{selectedGroup.name}</h3>
+      <p class="mt-1 text-xs text-base-content/55">{selectedGroup.rows.length} jobs · {selectedGroup.done} complete · {selectedGroup.active} active · {selectedGroup.queued} queued · {selectedGroup.failed} failed</p>
+      <div class="my-3 flex flex-wrap gap-2">
+        <button class="btn btn-sm btn-primary text-xs" onclick={() => stopDownloadGroup(selectedGroup!.rows[0])} disabled={Boolean(actionBusy[selectedGroup.rows[0].job.jobId]) || !(selectedGroup.active + selectedGroup.queued)}>Stop group</button>
+        <button class="btn btn-sm btn-primary text-xs" onclick={() => startDownloadGroup(selectedGroup!.rows[0])} disabled={Boolean(actionBusy[selectedGroup.rows[0].job.jobId])}>Retry failed / stopped</button>
       </div>
+      <progress class="progress progress-success mb-3 h-1 w-full" value={selectedGroup.done} max={selectedGroup.rows.length} aria-label="Completed jobs in collection"></progress>
+    {:else if view === 'collections'}
+      <h3 class="text-lg font-semibold">Collections</h3>
+      <p class="mt-1 text-xs text-base-content/55">Channel and playlist submissions</p>
+    {/if}
+
+    {#if view === 'jobs'}
+      <div class="tabs tabs-border mb-3 flex-nowrap overflow-x-auto" role="tablist" aria-label="Job filters">
+        {#each tabs as tab}
+          <button type="button" onclick={() => changeFilter(tab.key)} class={['tab h-10 shrink-0 gap-2 px-3 text-xs', activeFilter === tab.key && 'tab-active text-primary']} aria-pressed={activeFilter === tab.key} aria-current={activeFilter === tab.key ? 'page' : undefined}>
+            {tab.label}{#if tab.count !== null}<span class="text-[11px] tabular-nums">{tab.count}</span>{/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    <div class="my-3.5 flex flex-wrap gap-2">
+      <label class="input input-sm flex min-w-40 flex-1 items-center gap-2 bg-base-100">
+        <Search class="h-3.5 w-3.5 shrink-0 text-base-content/40" />
+        <input class="w-full" type="search" bind:value={query} oninput={scheduleSearch} aria-label={view === 'collections' ? 'Search collections' : 'Search jobs'} placeholder={view === 'collections' ? 'Find a collection…' : selectedCollection ? 'Search jobs in this collection…' : 'Search source or job ID…'} />
+      </label>
+      {#if view === 'jobs'}<Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="select-sm w-36 bg-base-100 text-xs" />{/if}
     </div>
-  {/if}
-</div>
+    {#if view === 'jobs'}
+      <div class="mb-3 flex flex-wrap gap-1" aria-label="Job source filters">
+        {#each sourceTabs as tab}<button class={['btn btn-xs btn-ghost font-normal', sourceFilter === tab.key ? 'text-primary' : 'text-base-content/50']} aria-pressed={sourceFilter === tab.key} onclick={() => changeSourceFilter(tab.key)}>{tab.label}</button>{/each}
+      </div>
+    {/if}
+    {#if queueState.error || actionError}<div class="alert alert-error my-4 text-sm" role="alert"><CircleAlert class="h-4 w-4" /><span>{actionError ?? queueState.error}</span></div>{/if}
+    {#if collectionsLoading || (queueState.loading && !queueState.rows.length)}
+      <div class="flex justify-center py-16" role="status" aria-label="Loading jobs"><span class="loading loading-spinner loading-md"></span></div>
+    {:else if view === 'collections'}
+      <div class="space-y-2">
+        {#each visibleCollections as group (group.id)}
+          <article class="card grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 rounded-lg border border-base-300 bg-base-100 p-3.5">
+            <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50"><Folder class="h-4 w-4" /></div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2"><button class="link text-left text-sm font-semibold text-primary" onclick={() => openCollection(group.id)}>{group.name}</button><span class="badge badge-sm badge-ghost rounded text-[11px]">{group.kind}</span></div>
+              <p class="mt-1 text-xs text-base-content/55">{new Date(group.rows[0].job.createdAt).toLocaleString()}</p>
+              <p class="my-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60"><span>{group.rows.length} jobs</span><span>{group.done} complete</span><span>{group.active} active</span><span>{group.queued} queued</span><span>{group.failed} failed</span></p>
+              <progress class="progress progress-success block h-1 w-full" value={group.done} max={group.rows.length} aria-label="Completed jobs"></progress>
+              <button class="btn btn-sm btn-accent mt-2 text-xs" onclick={() => openCollection(group.id)}>Open collection <ChevronRight class="h-3.5 w-3.5" /></button>
+            </div>
+          </article>
+        {:else}<p class="py-10 text-center text-sm text-base-content/60">No collections match this view.</p>{/each}
+      </div>
+    {:else if visibleRows.length === 0}
+      <div class="py-10 text-center"><Server class="mx-auto h-8 w-8 text-base-content/30" /><p class="mt-4 text-sm font-semibold">No jobs match this view</p><p class="mt-1 text-xs text-base-content/50">Queue a download or change the filters.</p></div>
+    {:else}
+      <div class="space-y-2">
+        {#each visibleRows as row (row.job.jobId)}
+          <JobRow {row} {optionPresetsByKey} busyAction={actionBusy[row.job.jobId]} onstop={stopDownload} onstart={startDownload} onclearprovider={clearDownloadProvider} onpriority={updatePriority} oncollection={openCollection} />
+        {/each}
+      </div>
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-base-content/55">{Math.min((page - 1) * pageSize + 1, matchingCount)}–{Math.min(page * pageSize, matchingCount)} of {matchingCount} jobs</p>
+        <div class="flex gap-2"><button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={page <= 1 || queueState.loading} onclick={previousPage}><ChevronLeft class="h-3.5 w-3.5" />Previous</button><button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={!hasNext || queueState.loading} onclick={nextPage}>Next<ChevronRight class="h-3.5 w-3.5" /></button></div>
+      </div>
+    {/if}
+  </div>
+</section>
 
 <Modal bind:open={cleanupOpen} title="Clean up download history" size="md">
   <div class="space-y-4 text-sm">
