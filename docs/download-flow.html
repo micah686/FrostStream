@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="en" data-theme="flowguide">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="A visual guide to FrostStream's single download, playlist and creator workflows, with a detailed look at Cleipnir.Flows orchestration and recovery."><title>FrostStream · The download flow</title><style>/* Embedded Tailwind CSS 4.3.5 and daisyUI 5.7.50; generated from installed project packages. */
+/*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+@layer properties;
+@layer theme, base, components, utilities;
+@layer theme {
+  :root, :host {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    --spacing: 0.25rem;
+    --container-2xl: 42rem;
+    --container-4xl: 56rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: calc(1 / 0.75);
+    --text-sm: 0.875rem;
+    --text-sm--line-height: calc(1.25 / 0.875);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+    --tracking-tight: -0.025em;
+    --tracking-widest: 0.1em;
+    --leading-relaxed: 1.625;
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+  }
+}
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  html, :host {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(--default-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+  hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+  b, strong {
+    font-weight: bolder;
+  }
+  code, kbd, samp, pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+  small {
+    font-size: 80%;
+  }
+  sub, sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  sub {
+    bottom: -0.25em;
+  }
+  sup {
+    top: -0.5em;
+  }
+  table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  :-moz-focusring:where(:not(iframe)) {
+    outline: auto;
+  }
+  progress {
+    vertical-align: baseline;
+  }
+  summary {
+    display: list-item;
+  }
+  ol, ul, menu {
+    list-style: none;
+  }
+  img, svg, video, canvas, audio, iframe, embed, object {
+    display: block;
+    vertical-align: middle;
+  }
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+  button, input, select, optgroup, textarea, ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+  :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+  ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+  ::placeholder {
+    opacity: 1;
+  }
+  @supports (not (-webkit-appearance: -apple-pay-button))  or (contain-intrinsic-size: 1px) {
+    ::placeholder {
+      color: currentcolor;
+      @supports (color: color-mix(in lab, red, red)) {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+  textarea {
+    resize: vertical;
+  }
+  ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+  ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+  ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+  :-moz-ui-invalid {
+    box-shadow: none;
+  }
+  button, input:where([type="button"], [type="reset"], [type="submit"]), ::file-selector-button {
+    appearance: button;
+  }
+  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {
+    height: auto;
+  }
+  [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}
+@layer utilities {
+  @layer daisyui.l1.l2.l3 {
+    .collapse-title {
+      grid-column-start: 1;
+      grid-row-start: 1;
+      position: relative;
+      width: 100%;
+      padding: 1rem;
+      padding-inline-end: 3rem;
+      min-height: 1lh;
+      transition: background-color 0.2s ease-out;
+    }
+  }
+  @layer daisyui.l1.l2 {
+    .collapse-arrow > .collapse-title:after {
+      position: absolute;
+      display: block;
+      height: 0.5rem;
+      width: 0.5rem;
+      transform: translateY(-100%) rotate(45deg);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .collapse-arrow > .collapse-title:after {
+        transition-property: all;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 0.2s;
+      }
+    }
+    .collapse-arrow > .collapse-title:after {
+      top: 50%;
+      inset-inline-end: 1.4rem;
+      content: "";
+      transform-origin: 75% 75%;
+      box-shadow: 2px 2px;
+      pointer-events: none;
+    }
+    .collapse-plus > .collapse-title:after {
+      position: absolute;
+      display: block;
+      height: 0.5rem;
+      width: 0.5rem;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .collapse-plus > .collapse-title:after {
+        transition-property: all;
+        transition-duration: 300ms;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+    }
+    .collapse-plus > .collapse-title:after {
+      top: 0.9rem;
+      inset-inline-end: 1.4rem;
+      --tw-content: "+";
+      content: var(--tw-content);
+      pointer-events: none;
+    }
+    .collapse-arrow > .collapse-title:after {
+      position: absolute;
+      display: block;
+      height: 0.5rem;
+      width: 0.5rem;
+      transform: translateY(-100%) rotate(45deg);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .collapse-arrow > .collapse-title:after {
+        transition-property: all;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 0.2s;
+      }
+    }
+    .collapse-arrow > .collapse-title:after {
+      top: 50%;
+      inset-inline-end: 1.4rem;
+      content: "";
+      transform-origin: 75% 75%;
+      box-shadow: 2px 2px;
+      pointer-events: none;
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    :where(.btn) {
+      width: unset;
+    }
+    .btn {
+      --size: calc(var(--size-field, 0.25rem) * 10);
+      --btn-p: 1rem;
+      --btn-fg: var(--color-base-content);
+      display: inline-flex;
+      flex-shrink: 0;
+      cursor: pointer;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: center;
+      gap: calc(0.25rem * 1.5);
+      text-align: center;
+      vertical-align: middle;
+      outline-offset: 2px;
+      webkit-user-select: none;
+      user-select: none;
+      font-weight: 600;
+      border-start-start-radius: var(--join-ss, var(--radius-field));
+      border-start-end-radius: var(--join-se, var(--radius-field));
+      border-end-start-radius: var(--join-es, var(--radius-field));
+      border-end-end-radius: var(--join-ee, var(--radius-field));
+      border-width: var(--border);
+      touch-action: manipulation;
+      transition-property: color, background-color, border-color, box-shadow, transform;
+      transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+      transition-duration: 0.2s;
+      --btn-bg: var(--btn-color, var(--color-base-200));
+      --btn-border: var(--btn-color, var(--color-base-200));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn {
+        --btn-border: color-mix(
+      in oklab,
+      var(--btn-color, var(--color-base-200)),
+      #000 calc(var(--depth) * 5%)
+    );
+      }
+    }
+    .btn {
+      --btn-soft-bg: initial;
+      --btn-shadow: 0 3px 2px -2px var(--btn-bg),
+      0 4px 3px -2px var(--btn-bg);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn {
+        --btn-shadow: 0 3px 2px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000),
+      0 4px 3px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000);
+      }
+    }
+    .btn {
+      --btn-inset: 0 0.5px 0 0.5px oklch(100% 0 0 / calc(var(--depth) * 6%));
+      height: var(--size);
+      padding-inline: var(--btn-p);
+      font-size: var(--fontsize, 0.875rem);
+      background-color: var(--btn-bg);
+      color: var(--btn-fg);
+      border-color: var(--btn-border);
+      border-style: var(--btn-border-style, solid);
+      outline-color: var(--btn-color, var(--color-base-content));
+      --tw-prose-links: var(--btn-fg);
+      background-image: none, var(--fx-noise);
+      background-size: auto, calc(var(--noise, 0) * 100%);
+      text-shadow: 0 0.5px oklch(100% 0 0 / calc(var(--depth) * 0.15));
+      box-shadow: var(--btn-inset) inset, var(--btn-shadow);
+    }
+    .btn:is([type="checkbox"], [type="radio"]) {
+      appearance: none;
+    }
+    .btn:is([type="checkbox"], [type="radio"])[aria-label]::after {
+      --tw-content: attr(aria-label);
+      content: var(--tw-content);
+    }
+    .btn:where(:checked:not(.filter [type="radio"].btn)) {
+      --btn-color: var(--color-primary);
+      --btn-fg: var(--color-primary-content);
+    }
+  }
+  .prose :where(a.btn:not(.btn-link)):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+    text-decoration-line: none;
+  }
+  @layer daisyui.l1 {
+    @media (hover: hover) {
+      .btn:hover {
+        --btn-bg: var(--btn-color, var(--color-base-200));
+      }
+      @supports (color: color-mix(in lab, red, red)) {
+        .btn:hover {
+          --btn-bg: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 7%);
+        }
+      }
+      .btn:hover {
+        color: var(--btn-fg);
+        --btn-border: var(--btn-bg);
+      }
+      @supports (color: color-mix(in lab, red, red)) {
+        .btn:hover {
+          --btn-border: color-mix(in oklab, var(--btn-bg), #000 calc(var(--depth) * 5%));
+        }
+      }
+      .btn:hover {
+        --btn-border-style: solid;
+        --btn-inset: 0 0.5px 0 0.5px oklch(100% 0 0 / calc(var(--depth) * 6%));
+        --btn-shadow: 0 3px 2px -2px var(--btn-bg),
+          0 4px 3px -2px var(--btn-bg);
+      }
+      @supports (color: color-mix(in lab, red, red)) {
+        .btn:hover {
+          --btn-shadow: 0 3px 2px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000),
+          0 4px 3px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000);
+        }
+      }
+    }
+    .btn:active:not(.btn-active, [aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      translate: 0 0.5px;
+      --btn-bg: var(--btn-color, var(--color-base-200));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:active:not(.btn-active, [aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+        --btn-bg: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 5%);
+      }
+    }
+    .btn:active:not(.btn-active, [aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      color: var(--btn-fg, var(--color-base-content));
+      --btn-border: var(--btn-color, var(--color-base-200));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:active:not(.btn-active, [aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+        --btn-border: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 7%);
+      }
+    }
+    .btn:active:not(.btn-active, [aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      --btn-border-style: solid;
+      --btn-inset: 0 0 0 0 oklch(0% 0 0/0);
+      --btn-shadow: 0 0 0 0 oklch(0% 0 0/0);
+    }
+    .btn:where(:checked:not(.filter [type="radio"].btn), :not([type="radio"], [type="checkbox"]):focus-visible ) {
+      --btn-bg: var(--btn-color, var(--color-base-200));
+      color: var(--btn-fg, var(--color-base-content));
+      --btn-border: var(--btn-bg);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:where(:checked:not(.filter [type="radio"].btn), :not([type="radio"], [type="checkbox"]):focus-visible ) {
+        --btn-border: color-mix(in oklab, var(--btn-bg), #000 calc(var(--depth) * 5%));
+      }
+    }
+    .btn:where(:checked:not(.filter [type="radio"].btn), :not([type="radio"], [type="checkbox"]):focus-visible ) {
+      --btn-border-style: solid;
+      --btn-inset: 0 0.5px 0 0.5px oklch(100% 0 0 / calc(var(--depth) * 6%));
+      --btn-shadow: 0 3px 2px -2px var(--btn-bg),
+        0 4px 3px -2px var(--btn-bg);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:where(:checked:not(.filter [type="radio"].btn), :not([type="radio"], [type="checkbox"]):focus-visible ) {
+        --btn-shadow: 0 3px 2px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000),
+        0 4px 3px -2px color-mix(in oklab, var(--btn-bg) calc(var(--depth) * 30%), #0000);
+      }
+    }
+    .btn:where(:checked:not(.filter [type="radio"].btn), :not([type="radio"], [type="checkbox"]):focus-visible ) {
+      isolation: isolate;
+    }
+    .btn:focus-visible {
+      outline-width: 2px;
+      outline-style: solid;
+      isolation: isolate;
+    }
+    .btn:has(:focus-visible) {
+      outline-width: 2px;
+      outline-style: solid;
+      isolation: isolate;
+    }
+  }
+  @layer daisyui.l1.l2 {
+    .btn:is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      --btn-bg: var(--btn-color, var(--color-base-200));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+        --btn-bg: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 5%);
+      }
+    }
+    .btn:is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      color: var(--btn-fg, var(--color-base-content));
+      --btn-border: var(--btn-color, var(--color-base-200));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+        --btn-border: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 7%);
+      }
+    }
+    .btn:is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""]) ) {
+      --btn-border-style: solid;
+      --btn-inset: 0 0 0 0 oklch(0% 0 0/0);
+      --btn-shadow: 0 0 0 0 oklch(0% 0 0/0);
+      isolation: isolate;
+    }
+  }
+  @layer daisyui {
+    .btn:is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]) {
+      pointer-events: none;
+      color: var(--color-base-content);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]) {
+        color: color-mix(in oklch, var(--color-base-content) 20%, #0000);
+      }
+    }
+    .btn:is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]) {
+      --btn-bg: #0000;
+      --btn-border: #0000;
+      background-image: none;
+      --btn-inset: 0 0 0 0 oklch(0% 0 0/0);
+      --btn-shadow: 0 0 0 0 oklch(0% 0 0/0);
+    }
+    .btn:is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]):not(.btn-link, .btn-ghost) {
+      background-color: var(--color-base-content);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn:is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]):not(.btn-link, .btn-ghost) {
+        background-color: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+      }
+    }
+  }
+  .collapse:not(td, tr, colgroup) {
+    visibility: revert-layer;
+    @layer daisyui.l1.l2.l3 {
+      display: grid;
+      position: relative;
+      border-radius: var(--radius-box, 1rem);
+      width: 100%;
+      grid-template-rows: max-content 0fr;
+      grid-template-columns: minmax(0, 1fr);
+      isolation: isolate;
+      @media (prefers-reduced-motion: no-preference) {
+        transition: grid-template-rows 0.2s;
+      }
+       > input:is([type="checkbox"], [type="radio"]) {
+        grid-column-start: 1;
+        grid-row-start: 1;
+        appearance: none;
+        opacity: 0;
+        z-index: 1;
+        width: 100%;
+        padding: 1rem;
+        padding-inline-end: 3rem;
+        min-height: 1lh;
+        transition: background-color 0.2s ease-out;
+      }
+      &:is([open], [tabindex]:focus:not(.collapse-close), [tabindex]:focus-within:not(.collapse-close) ), &:not(.collapse-close):has( > input:is([type="checkbox"], [type="radio"]):checked) {
+        grid-template-rows: max-content 1fr;
+      }
+      &:is([open], [tabindex]:focus:not(.collapse-close), [tabindex]:focus-within:not(.collapse-close) ) > .collapse-content, &:not(.collapse-close) > :where(input:is([type="checkbox"], [type="radio"]):checked ~ .collapse-content) {
+        --overflow-delay: 0.2s;
+        overflow: revert-layer;
+        content-visibility: visible;
+        min-height: fit-content;
+        @supports not (content-visibility: visible) {
+          visibility: visible;
+        }
+      }
+      &:focus-visible, &:has( > input:is([type="checkbox"], [type="radio"]):focus-visible), &:has(summary:focus-visible) {
+        outline-color: var(--color-base-content);
+        outline-style: solid;
+        outline-width: 2px;
+        outline-offset: 2px;
+      }
+      &:not(.collapse-close) {
+         > input[type="checkbox"],  > input[type="radio"]:not(:checked),  > .collapse-title {
+          cursor: pointer;
+        }
+      }
+      &[tabindex]:focus:not(.collapse-close, .collapse[open]), &[tabindex]:focus-within:not(.collapse-close, .collapse[open]) {
+         > .collapse-title {
+          cursor: unset;
+        }
+      }
+      &:is([open], [tabindex]:focus:not(.collapse-close), [tabindex]:focus-within:not(.collapse-close) ) > :where(.collapse-content), &:not(.collapse-close) > :where(input:is([type="checkbox"], [type="radio"]):checked ~ .collapse-content) {
+        padding-bottom: 1rem;
+      }
+      &:is(details) {
+        width: 100%;
+        &::details-content {
+          --overflow-delay: 0s;
+          overflow: clip;
+          height: 0;
+        }
+        &:where([open])::details-content {
+          overflow: revert-layer;
+          height: auto;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          &::details-content {
+            transition: overflow 0.2s allow-discrete var(--overflow-delay), content-visibility 0.2s allow-discrete, visibility 0.2s allow-discrete, min-height 0.2s ease-out allow-discrete, padding 0.1s ease-out 20ms, background-color 0.2s ease-out, height 0.2s;
+            interpolate-size: allow-keywords;
+          }
+          &:where([open])::details-content {
+            --overflow-delay: 0.2s;
+          }
+        }
+         > summary {
+          position: relative;
+          display: block;
+          outline: none;
+          &::-webkit-details-marker {
+            display: none;
+          }
+        }
+      }
+    }
+    @layer daisyui.l1.l2 {
+      &:is([open]) {
+        &.collapse-arrow {
+           > .collapse-title:after {
+            @media (prefers-reduced-motion: no-preference) {
+              transform: translateY(-50%) rotate(225deg);
+            }
+          }
+        }
+      }
+      &.collapse-open {
+        &.collapse-arrow {
+           > .collapse-title:after {
+            @media (prefers-reduced-motion: no-preference) {
+              transform: translateY(-50%) rotate(225deg);
+            }
+          }
+        }
+        &.collapse-plus {
+           > .collapse-title:after {
+            --tw-content: "−";
+            content: var(--tw-content);
+          }
+        }
+      }
+      &[tabindex].collapse-arrow:focus:not(.collapse-close), &.collapse-arrow[tabindex]:focus-within:not(.collapse-close) {
+         > .collapse-title:after {
+          transform: translateY(-50%) rotate(225deg);
+        }
+      }
+      &.collapse-arrow:not(.collapse-close) {
+         > input:is([type="checkbox"], [type="radio"]):checked ~ .collapse-title:after {
+          transform: translateY(-50%) rotate(225deg);
+        }
+      }
+      &[open] {
+        &.collapse-plus {
+           > .collapse-title:after {
+            --tw-content: "−";
+            content: var(--tw-content);
+          }
+        }
+      }
+      &[tabindex].collapse-plus:focus:not(.collapse-close) {
+         > .collapse-title:after {
+          --tw-content: "−";
+          content: var(--tw-content);
+        }
+      }
+      &.collapse-plus:not(.collapse-close) {
+         > input:is([type="checkbox"], [type="radio"]):checked ~ .collapse-title:after {
+          --tw-content: "−";
+          content: var(--tw-content);
+        }
+      }
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    .collapse-content {
+      --overflow-delay: 0s;
+      content-visibility: hidden;
+      overflow: clip;
+      grid-column-start: 1;
+      grid-row-start: 2;
+      min-height: 0;
+      padding-left: 1rem;
+      padding-right: 1rem;
+      cursor: unset;
+    }
+    @supports not (content-visibility: hidden) {
+      .collapse-content {
+        visibility: hidden;
+      }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .collapse-content {
+        transition: overflow 0.2s allow-discrete var(--overflow-delay), content-visibility 0.2s allow-discrete, visibility 0.2s allow-discrete, min-height 0.2s ease-out allow-discrete, padding 0.1s ease-out 20ms, background-color 0.2s ease-out;
+      }
+    }
+    details > .collapse-content {
+      content-visibility: visible;
+    }
+  }
+  @layer daisyui.l1.l2 {
+    .collapse-open > .collapse-content {
+      --overflow-delay: 0.2s;
+      overflow: revert-layer;
+      content-visibility: visible;
+      min-height: fit-content;
+      padding-bottom: 1rem;
+    }
+    @supports not (content-visibility: visible) {
+      .collapse-open > .collapse-content {
+        visibility: visible;
+      }
+    }
+  }
+  .collapse {
+    visibility: collapse;
+  }
+  @layer daisyui.l1.l2.l3 {
+    .table {
+      font-size: 0.875rem;
+      position: relative;
+      width: 100%;
+      border-collapse: separate;
+      --tw-border-spacing-x: 0px;
+      --tw-border-spacing-y: 0px;
+      border-spacing: var(--tw-border-spacing-x) var(--tw-border-spacing-y);
+      border-radius: var(--radius-box);
+      text-align: left;
+    }
+    .table:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+      text-align: right;
+    }
+    @media (hover: hover) {
+      :is(:is(.table tr.row-hover), .table tr.row-hover:nth-child(even)):hover {
+        background-color: var(--color-base-200);
+      }
+    }
+    .table :where(th, td) {
+      padding-inline: calc(0.25rem * 4);
+      padding-block: calc(0.25rem * 3);
+      vertical-align: middle;
+    }
+    .table :where(thead, tfoot) {
+      white-space: nowrap;
+      color: var(--color-base-content);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .table :where(thead, tfoot) {
+        color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+      }
+    }
+    .table :where(thead, tfoot) {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .table :where(tfoot tr:first-child :is(td, th)) {
+      border-top: var(--border) solid var(--color-base-content);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .table :where(tfoot tr:first-child :is(td, th)) {
+        border-top: var(--border) solid color-mix(in oklch, var(--color-base-content) 5%, #0000);
+      }
+    }
+    .table :where(.table-pin-rows thead) {
+      position: sticky;
+      top: 0px;
+      z-index: 1;
+    }
+    .table :where(.table-pin-rows tfoot) {
+      position: sticky;
+      bottom: 0px;
+      z-index: 1;
+    }
+    .table :where(.table-pin-rows :is(thead, tfoot) tr) {
+      background-color: var(--color-base-100);
+    }
+    .table :where(.table-pin-cols tr th) {
+      position: sticky;
+      right: 0px;
+      left: 0px;
+      background-color: var(--color-base-100);
+    }
+    .table :where(thead tr :is(td, th), tbody tr:not(:last-child) :is(td, th)) {
+      border-bottom: var(--border) solid var(--color-base-content);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .table :where(thead tr :is(td, th), tbody tr:not(:last-child) :is(td, th)) {
+        border-bottom: var(--border) solid color-mix(in oklch, var(--color-base-content) 5%, #0000);
+      }
+    }
+  }
+  .sticky {
+    position: sticky;
+  }
+  .top-0 {
+    top: 0px;
+  }
+  .mx-auto {
+    margin-inline: auto;
+  }
+  .my-4 {
+    margin-block: calc(var(--spacing) * 4);
+  }
+  .my-6 {
+    margin-block: calc(var(--spacing) * 6);
+  }
+  .my-7 {
+    margin-block: calc(var(--spacing) * 7);
+  }
+  .my-8 {
+    margin-block: calc(var(--spacing) * 8);
+  }
+  .mt-2 {
+    margin-top: calc(var(--spacing) * 2);
+  }
+  .mt-3 {
+    margin-top: calc(var(--spacing) * 3);
+  }
+  .mt-3\! {
+    margin-top: calc(var(--spacing) * 3) !important;
+  }
+  .mt-4 {
+    margin-top: calc(var(--spacing) * 4);
+  }
+  .mt-5 {
+    margin-top: calc(var(--spacing) * 5);
+  }
+  .mt-6 {
+    margin-top: calc(var(--spacing) * 6);
+  }
+  .mt-7 {
+    margin-top: calc(var(--spacing) * 7);
+  }
+  .mt-8 {
+    margin-top: calc(var(--spacing) * 8);
+  }
+  .mt-9 {
+    margin-top: calc(var(--spacing) * 9);
+  }
+  .mt-10 {
+    margin-top: calc(var(--spacing) * 10);
+  }
+  .mt-14 {
+    margin-top: calc(var(--spacing) * 14);
+  }
+  .mt-20 {
+    margin-top: calc(var(--spacing) * 20);
+  }
+  .mb-4 {
+    margin-bottom: calc(var(--spacing) * 4);
+  }
+  .mb-5 {
+    margin-bottom: calc(var(--spacing) * 5);
+  }
+  @layer daisyui.l1.l2.l3 {
+    .badge {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      gap: calc(0.25rem * 2);
+      border-radius: var(--radius-selector);
+      vertical-align: middle;
+      color: var(--badge-fg);
+      border: var(--border) solid var(--badge-color, var(--color-base-200));
+      font-size: 0.875rem;
+      width: fit-content;
+      background-size: auto, calc(var(--noise) * 100%);
+      background-image: none, var(--fx-noise);
+      background-color: var(--badge-bg);
+      --badge-bg: var(--badge-color, var(--color-base-100));
+      --badge-fg: var(--color-base-content);
+      --size: calc(var(--size-selector, 0.25rem) * 6);
+      height: var(--size);
+      padding-inline: calc(var(--size) / 2 - var(--border));
+    }
+  }
+  .flex {
+    display: flex;
+  }
+  .grid {
+    display: grid;
+  }
+  .hidden {
+    display: none;
+  }
+  .table {
+    display: table;
+  }
+  .h-screen {
+    height: 100vh;
+  }
+  .max-w-2xl {
+    max-width: var(--container-2xl);
+  }
+  .max-w-4xl {
+    max-width: var(--container-4xl);
+  }
+  .max-w-\[1600px\] {
+    max-width: 1600px;
+  }
+  .min-w-0 {
+    min-width: 0px;
+  }
+  .flex-1 {
+    flex: 1;
+  }
+  .shrink-0 {
+    flex-shrink: 0;
+  }
+  .flex-col {
+    flex-direction: column;
+  }
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+  .items-center {
+    align-items: center;
+  }
+  .justify-between {
+    justify-content: space-between;
+  }
+  .gap-2 {
+    gap: calc(var(--spacing) * 2);
+  }
+  .gap-3 {
+    gap: calc(var(--spacing) * 3);
+  }
+  .gap-4 {
+    gap: calc(var(--spacing) * 4);
+  }
+  .gap-6 {
+    gap: calc(var(--spacing) * 6);
+  }
+  .gap-8 {
+    gap: calc(var(--spacing) * 8);
+  }
+  :where(.space-y-1 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(var(--spacing) * var(--tw-space-y-reverse));
+    margin-block-end: calc(var(--spacing) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  .overflow-hidden {
+    overflow: hidden;
+  }
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
+  .overflow-y-auto {
+    overflow-y: auto;
+  }
+  .rounded-box {
+    border-radius: var(--radius-box);
+  }
+  .rounded-field {
+    border-radius: var(--radius-field);
+  }
+  .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+  .border-t {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+  }
+  .border-t-2 {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 2px;
+  }
+  .border-r {
+    border-right-style: var(--tw-border-style);
+    border-right-width: 1px;
+  }
+  .border-b {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+  }
+  .border-l-2 {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 2px;
+  }
+  .border-l-4 {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 4px;
+  }
+  .border-accent {
+    border-color: var(--color-accent);
+  }
+  .border-base-300 {
+    border-color: var(--color-base-300);
+  }
+  .bg-base-100 {
+    background-color: var(--color-base-100);
+  }
+  .bg-base-200 {
+    background-color: var(--color-base-200);
+  }
+  .p-3 {
+    padding: calc(var(--spacing) * 3);
+  }
+  .p-5 {
+    padding: calc(var(--spacing) * 5);
+  }
+  .px-3 {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+  .px-5 {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+  .px-6 {
+    padding-inline: calc(var(--spacing) * 6);
+  }
+  .py-2\.5 {
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+  .py-3 {
+    padding-block: calc(var(--spacing) * 3);
+  }
+  .py-4 {
+    padding-block: calc(var(--spacing) * 4);
+  }
+  .py-5 {
+    padding-block: calc(var(--spacing) * 5);
+  }
+  .py-8 {
+    padding-block: calc(var(--spacing) * 8);
+  }
+  .pt-5 {
+    padding-top: calc(var(--spacing) * 5);
+  }
+  .pt-6 {
+    padding-top: calc(var(--spacing) * 6);
+  }
+  .pt-9 {
+    padding-top: calc(var(--spacing) * 9);
+  }
+  .pt-16 {
+    padding-top: calc(var(--spacing) * 16);
+  }
+  .pb-10 {
+    padding-bottom: calc(var(--spacing) * 10);
+  }
+  .pl-6 {
+    padding-left: calc(var(--spacing) * 6);
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  .text-2xl\! {
+    font-size: var(--text-2xl) !important;
+    line-height: var(--tw-leading, var(--text-2xl--line-height)) !important;
+  }
+  .text-lg {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+  .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+  .text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+  .text-\[clamp\(3\.3rem\,7vw\,6\.5rem\)\] {
+    font-size: clamp(3.3rem, 7vw, 6.5rem);
+  }
+  .leading-relaxed {
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+  }
+  .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+  .font-extrabold {
+    --tw-font-weight: var(--font-weight-extrabold);
+    font-weight: var(--font-weight-extrabold);
+  }
+  .font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  .tracking-tight {
+    --tw-tracking: var(--tracking-tight);
+    letter-spacing: var(--tracking-tight);
+  }
+  .tracking-widest {
+    --tw-tracking: var(--tracking-widest);
+    letter-spacing: var(--tracking-widest);
+  }
+  .text-accent {
+    color: var(--color-accent);
+  }
+  .text-base-content {
+    color: var(--color-base-content);
+  }
+  .text-base-content\/50 {
+    color: var(--color-base-content);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+    }
+  }
+  .text-base-content\/65 {
+    color: var(--color-base-content);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-base-content) 65%, transparent);
+    }
+  }
+  .text-base-content\/75 {
+    color: var(--color-base-content);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-base-content) 75%, transparent);
+    }
+  }
+  .uppercase {
+    text-transform: uppercase;
+  }
+  @layer daisyui.l1.l2 {
+    .btn-primary {
+      --btn-color: var(--color-primary);
+      --btn-fg: var(--color-primary-content);
+      --btn-soft-bg: initial;
+    }
+    .btn-sm {
+      --fontsize: 0.75rem;
+      --btn-p: 0.75rem;
+      --size: calc(var(--size-field, 0.25rem) * 8);
+    }
+  }
+  @media (width >= 40rem) {
+    .sm\:mt-20 {
+      margin-top: calc(var(--spacing) * 20);
+    }
+    .sm\:p-5 {
+      padding: calc(var(--spacing) * 5);
+    }
+    .sm\:p-8 {
+      padding: calc(var(--spacing) * 8);
+    }
+    .sm\:px-10 {
+      padding-inline: calc(var(--spacing) * 10);
+    }
+    .sm\:pt-14 {
+      padding-top: calc(var(--spacing) * 14);
+    }
+    .sm\:pt-24 {
+      padding-top: calc(var(--spacing) * 24);
+    }
+    .sm\:text-xl {
+      font-size: var(--text-xl);
+      line-height: var(--tw-leading, var(--text-xl--line-height));
+    }
+  }
+  @media (width >= 48rem) {
+    .md\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .md\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .md\:grid-cols-\[0\.85fr_1\.15fr\] {
+      grid-template-columns: 0.85fr 1.15fr;
+    }
+  }
+  @media (width >= 64rem) {
+    .lg\:flex {
+      display: flex;
+    }
+    .lg\:hidden {
+      display: none;
+    }
+    .lg\:grid-cols-\[245px_minmax\(0\,1fr\)\] {
+      grid-template-columns: 245px minmax(0,1fr);
+    }
+  }
+  @media (width >= 80rem) {
+    .xl\:px-16 {
+      padding-inline: calc(var(--spacing) * 16);
+    }
+  }
+}
+@layer base {
+  :where(:root),:root:has(input.theme-controller[value="flowguide"]:checked),[data-theme="flowguide"] {
+    color-scheme: light;
+    --color-base-100: #fcfcf9;
+    --color-base-200: #f0f2ed;
+    --color-base-300: #d8dfd8;
+    --color-base-content: #20352f;
+    --color-primary: #176457;
+    --color-primary-content: #ffffff;
+    --color-secondary: #48645a;
+    --color-secondary-content: #ffffff;
+    --color-accent: #176457;
+    --color-accent-content: #ffffff;
+    --color-neutral: #20352f;
+    --color-neutral-content: #fcfcf9;
+    --color-info: #356c89;
+    --color-info-content: #ffffff;
+    --color-success: #367c57;
+    --color-success-content: #ffffff;
+    --color-warning: #a26b25;
+    --color-warning-content: #ffffff;
+    --color-error: #a14d42;
+    --color-error-content: #ffffff;
+    --radius-selector: .25rem;
+    --radius-field: .5rem;
+    --radius-box: .75rem;
+    --size-selector: .25rem;
+    --size-field: .25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
+  }
+}
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-leading {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-tracking {
+  syntax: "*";
+  inherits: false;
+}
+@layer properties {
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: block))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    *, ::before, ::after, ::backdrop {
+      --tw-space-y-reverse: 0;
+      --tw-border-style: solid;
+      --tw-leading: initial;
+      --tw-font-weight: initial;
+      --tw-tracking: initial;
+    }
+  }
+}
+</style><style>/* Document-specific typography, diagrams and print behavior. Layout uses compiled Tailwind utilities. */
+html{scroll-behavior:smooth;scroll-padding-top:2rem}body{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}h1,h2,h3{letter-spacing:-.045em;line-height:1.12}h2{font-size:clamp(2rem,4vw,3.25rem);font-weight:750;margin:1rem 0}h3{font-size:1.25rem;font-weight:700;margin:.6rem 0 1rem;letter-spacing:-.025em}.doc-section p,.prose-copy p{line-height:1.75}.doc-section>p,.prose-copy p{margin:.8rem 0}.section-lead{font-size:1.15rem;color:color-mix(in oklch,var(--color-base-content) 72%,transparent);max-width:52rem;margin-bottom:2rem!important}.eyebrow{font-size:.68rem;font-weight:750;letter-spacing:.18em;text-transform:uppercase;color:var(--color-accent)}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.85em;overflow-wrap:anywhere;background:var(--color-base-200);padding:.1em .3em;border-radius:3px}.table{min-width:650px;font-size:.875rem;line-height:1.65}.table th{color:var(--color-base-content);background:var(--color-base-200);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}.table td{vertical-align:top}.table td:first-child{font-weight:600;width:25%}.table tr:last-child{border-bottom:0}.source-note{font-size:.75rem;color:color-mix(in oklch,var(--color-base-content) 70%,transparent);margin-top:1rem}.source-note a,.source-list a{color:var(--color-accent);text-decoration:underline;text-underline-offset:3px}summary{cursor:pointer}.technical .collapse-content{font-size:.9rem}.diagram{width:100%;height:auto;display:block;font-family:ui-sans-serif,system-ui,sans-serif}.node rect{fill:var(--color-base-100);stroke:var(--color-base-300);stroke-width:1.4}.node text{fill:var(--color-base-content);font-size:15px;font-weight:650}.node .sub{fill:color-mix(in oklch,var(--color-base-content) 76%,transparent);font-size:11.5px;font-weight:400}.node.flow rect{fill:color-mix(in oklch,var(--color-accent) 9%,var(--color-base-100));stroke:var(--color-accent)}.node.success rect{fill:color-mix(in oklch,var(--color-success) 8%,var(--color-base-100));stroke:var(--color-success)}.node.failure rect{fill:color-mix(in oklch,var(--color-error) 5%,var(--color-base-100));stroke:color-mix(in oklch,var(--color-error) 60%,var(--color-base-300))}.node.decision rect{fill:color-mix(in oklch,var(--color-warning) 9%,var(--color-base-100));stroke:var(--color-warning);stroke-dasharray:5 3}.edge{fill:none;stroke:color-mix(in oklch,var(--color-base-content) 55%,var(--color-base-100));stroke-width:1.7;stroke-linejoin:round}.edge.dashed{stroke-dasharray:5 4}.edge-label{fill:var(--color-base-content);font-size:11.5px;paint-order:stroke;stroke:var(--color-base-100);stroke-width:5px;stroke-linejoin:round}.lane-label{fill:color-mix(in oklch,var(--color-base-content) 70%,transparent);font-size:10.5px;font-weight:600;letter-spacing:.5px}.lifeline{stroke:var(--color-base-300);stroke-width:1.3;stroke-dasharray:5 6}.nav-link[aria-current=true]{background:var(--color-base-200);color:var(--color-accent);font-weight:700}.nav-link{transition:background .15s}.nav-link:hover{background:var(--color-base-200)}[data-journey][aria-pressed=true]{outline:2px solid var(--color-accent);outline-offset:2px}.walk-steps li{padding:.65rem .6rem;display:flex;gap:.75rem;align-items:center;font-size:.85rem;border-bottom:1px solid var(--color-base-300)}.walk-steps li span{width:1.6rem;height:1.6rem;border:1px solid var(--color-base-300);display:grid;place-items:center;border-radius:50%;font-size:.7rem;flex-shrink:0}.walk-steps li[aria-current=step]{color:var(--color-accent);font-weight:700;background:var(--color-base-200)}.source-list li{display:grid;grid-template-columns:2rem minmax(0,1fr);gap:1rem;padding:1.25rem 0;border-top:1px solid var(--color-base-300);scroll-margin-top:2rem}.source-list a{overflow-wrap:anywhere}.source-list p{font-size:.85rem;margin:.3rem 0}.source-list code{font-size:.7rem;background:none;padding:0}.source-list small{display:block;font-size:.7rem;color:color-mix(in oklch,var(--color-base-content) 70%,transparent);margin-top:.3rem}.source-number{font-family:ui-monospace,monospace;color:var(--color-accent);font-size:.8rem}a:focus-visible,button:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--color-accent);outline-offset:4px}.skip-link{position:fixed;top:-5rem;left:1rem;z-index:100;background:var(--color-base-100);padding:1rem}.skip-link:focus{top:1rem}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+@media print{html{font-size:11px;scroll-behavior:auto}body{background:white;color:#111}.sidebar,.mobile-nav,.print-hide,#walkthrough{display:none!important}.main-layout{display:block!important}.main-content{padding:0!important;max-width:none!important}header{padding-top:1rem!important;padding-bottom:2rem!important}h1{font-size:42px!important}h2{font-size:27px}.doc-section{padding-top:2rem!important}figure{break-inside:avoid}.diagram-scroll{overflow:visible!important;padding:.5rem!important}.diagram{min-width:0!important;max-height:720px}.technical{display:block!important;break-inside:auto}.technical .collapse-content{content-visibility:visible!important;display:block!important;height:auto!important;padding-bottom:1rem}.technical:not([open])>.collapse-content{display:block!important}.collapse-title:after{display:none}a{color:inherit!important}#sources li{break-inside:avoid}h2,h3,summary{break-after:avoid}.source-list{font-size:9px}.table{min-width:0!important}.overflow-x-auto{overflow:visible!important}code{word-break:break-word}footer{margin-top:2rem!important}}
+</style></head>
+<body class="bg-base-100 text-base-content">
+<a href="#content" class="skip-link">Skip to content</a>
+<svg aria-hidden="true" width="0" height="0" style="position:absolute"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs></svg>
+<div class="main-layout mx-auto grid max-w-[1600px] lg:grid-cols-[245px_minmax(0,1fr)]">
+<aside class="sidebar hidden lg:flex sticky top-0 h-screen flex-col border-r border-base-300 px-5 py-8"><a href="#top" class="flex items-center gap-3 font-extrabold tracking-tight text-lg"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2v24M2 14h24M5.5 5.5l17 17M22.5 5.5l-17 17" stroke="currentColor" stroke-width="2"/><circle cx="14" cy="14" r="5" fill="var(--color-base-100)" stroke="currentColor" stroke-width="2"/></svg>FrostStream</a><p class="eyebrow mt-10 mb-4">The download field guide</p><nav aria-label="Guide sections" class="flex-1 overflow-y-auto space-y-1"><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#overview"><span class="font-mono text-xs text-base-content/50">01</span>The big picture</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#single"><span class="font-mono text-xs text-base-content/50">02</span>Single download</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#playlist"><span class="font-mono text-xs text-base-content/50">03</span>Playlist</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#creator"><span class="font-mono text-xs text-base-content/50">04</span>Creator / channel</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#cleipnir"><span class="font-mono text-xs text-base-content/50">05</span>Inside Cleipnir.Flows</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#recovery"><span class="font-mono text-xs text-base-content/50">06</span>Failures & control</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#walk"><span class="font-mono text-xs text-base-content/50">07</span>Interactive walkthrough</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#queue"><span class="font-mono text-xs text-base-content/50">08</span>Reading the queue</a><a class="nav-link flex items-center gap-3 rounded-field px-3 py-2.5 text-sm" href="#sources"><span class="font-mono text-xs text-base-content/50">09</span>Source map</a></nav><div class="pt-5 mt-5 border-t border-base-300 text-xs leading-relaxed text-base-content/65">A visual guide for everyone.<br>Implementation notes for engineers.<div class="mt-4 font-mono">Download V2 · 37ed0b8</div></div></aside>
+<main id="content" class="main-content min-w-0 px-5 pb-10 sm:px-10 xl:px-16">
+<header id="top" class="pt-9 sm:pt-14 pb-10 border-b border-base-300"><div class="flex flex-wrap items-center justify-between gap-4"><p class="eyebrow">FrostStream / Engineering explained</p><span class="badge text-xs">Offline-ready HTML guide</span></div><div class="mt-14 sm:mt-20 max-w-4xl"><p class="text-sm mb-5 text-base-content/65">Single downloads. Playlists. Entire channels.</p><h1 class="text-[clamp(3.3rem,7vw,6.5rem)] font-extrabold">The download<br><span class="text-accent">flow.</span></h1><p class="mt-7 max-w-2xl text-lg sm:text-xl leading-relaxed text-base-content/75">What happens after you press Download?<br>Follow the request from its first URL to a stored, catalogued library item—with <strong class="text-base-content font-semibold">Cleipnir.Flows</strong> at the center.</p></div><div class="flex flex-wrap items-center gap-3 mt-9 print-hide"><a class="btn btn-primary" href="#overview">Follow the flow ↓</a><button class="btn" id="expand-tech" aria-pressed="false">Open technical details</button><button class="btn" id="print-guide">Print / save PDF</button></div><p class="mt-6 text-xs text-base-content/65">Start with the diagrams. Open the technical notes when you want names, messages and implementation details.</p></header>
+<nav class="mobile-nav lg:hidden flex overflow-x-auto gap-2 py-4 border-b border-base-300" aria-label="Guide sections on mobile"><a class="btn btn-sm shrink-0" href="#overview">The big picture</a><a class="btn btn-sm shrink-0" href="#single">Single download</a><a class="btn btn-sm shrink-0" href="#playlist">Playlist</a><a class="btn btn-sm shrink-0" href="#creator">Creator / channel</a><a class="btn btn-sm shrink-0" href="#cleipnir">Inside Cleipnir.Flows</a><a class="btn btn-sm shrink-0" href="#recovery">Failures & control</a><a class="btn btn-sm shrink-0" href="#walk">Interactive walkthrough</a><a class="btn btn-sm shrink-0" href="#queue">Reading the queue</a><a class="btn btn-sm shrink-0" href="#sources">Source map</a></nav>
+<section id="overview" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">01 / The big picture</p><h2>From a URL to a library item.</h2><p class="section-lead">Three ways to request work. One shared pipeline that makes every item trackable.</p><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-overview">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">01 · Three entrances. One shared item flow.</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="01 · Three entrances. One shared item flow."><svg class="diagram" viewBox="0 0 950 450" style="min-width:760px" role="img" aria-labelledby="diagram-overview-title diagram-overview-desc"><title id="diagram-overview-title">01 · Three entrances. One shared item flow.</title><desc id="diagram-overview-desc">A single URL, playlist, or manual channel request enters a group coordinator. Direct groups publish one child; playlists gather pages; channel groups supervise discovery. All publish independent item downloads. Scheduled creator scans can publish items without a group flow.</desc><text class="lane-label" x="22" y="22">ONE REQUEST</text><text class="lane-label" x="350" y="22">COORDINATE &amp; DISCOVER</text><text class="lane-label" x="690" y="22">ONE FLOW PER ITEM</text><g class="node normal"><rect x="20" y="45" width="220" height="72" rx="10"/><text x="130.0" y="71" text-anchor="middle">Single URL</text><text class="sub" x="130.0" y="101" text-anchor="middle">1 selected item</text></g><polyline class="edge" points="240,81 320,81" marker-end="url(#arrow)"/><g class="node normal"><rect x="20" y="145" width="220" height="72" rx="10"/><text x="130.0" y="171" text-anchor="middle">Playlist</text><text class="sub" x="130.0" y="201" text-anchor="middle">An ordered collection</text></g><polyline class="edge" points="240,181 320,181" marker-end="url(#arrow)"/><g class="node normal"><rect x="20" y="245" width="220" height="72" rx="10"/><text x="130.0" y="271" text-anchor="middle">Creator / channel</text><text class="sub" x="130.0" y="301" text-anchor="middle">A source to scan</text></g><polyline class="edge" points="240,281 320,281" marker-end="url(#arrow)"/><g class="node flow"><rect x="320" y="45" width="270" height="72" rx="10"/><text x="455.0" y="71" text-anchor="middle">Direct group</text><text class="sub" x="455.0" y="101" text-anchor="middle">Publish one child</text></g><g class="node flow"><rect x="320" y="145" width="270" height="72" rx="10"/><text x="455.0" y="171" text-anchor="middle">Playlist group</text><text class="sub" x="455.0" y="201" text-anchor="middle">Gather pages → fan out</text></g><g class="node flow"><rect x="320" y="245" width="270" height="72" rx="10"/><text x="455.0" y="271" text-anchor="middle">Channel group + scan</text><text class="sub" x="455.0" y="301" text-anchor="middle">Discover → filter → fan out</text></g><polyline class="edge" points="590,81 635,81 635,181 680,181" marker-end="url(#arrow)"/><polyline class="edge" points="590,181 635,181 635,181 680,181" marker-end="url(#arrow)"/><polyline class="edge" points="590,281 635,281 635,181 680,181" marker-end="url(#arrow)"/><g class="node flow"><rect x="680" y="125" width="245" height="112" rx="10"/><text x="802.5" y="151" text-anchor="middle">DownloadJobV2Flow</text><text class="sub" x="802.5" y="221" text-anchor="middle">Independent run per item</text></g><polyline class="edge" points="802,237 802,355 650,355" marker-end="url(#arrow)"/><g class="node success"><rect x="345" y="323" width="305" height="72" rx="10"/><text x="497.5" y="349" text-anchor="middle">Stored media + library record</text><text class="sub" x="497.5" y="379" text-anchor="middle">Required files and metadata complete</text></g><text class="lane-label" x="20" y="425">CREATOR MONITOR: scheduled discovery also publishes child requests directly.</text></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">The teal boxes are Cleipnir workflows in DataBridge. A group organizes work; each child run owns the actual download lifecycle. Scheduled creator monitoring has a separate entry path, explained below.</figcaption></figure><div class="grid gap-8 md:grid-cols-3 my-8">
+<div><span class="eyebrow">01 / Ask</span><h3>Describe what to save.</h3><p>Submit a media URL, a playlist, or a channel. The API validates the request and resolves settings such as storage, cookies, priority and worker routing.</p></div>
+<div><span class="eyebrow">02 / Coordinate</span><h3>Make trackable work.</h3><p>DataBridge records the request and runs Cleipnir workflows. Collections become independent jobs, so each item has its own history and outcome.</p></div>
+<div><span class="eyebrow">03 / Preserve</span><h3>Save more than bytes.</h3><p>Workers acquire media and write files. The flow also stores metadata, links the library record and settles the result you see in the queue.</p></div></div><aside class="my-7 border-l-4 border-accent bg-base-200 px-6 py-5"><strong>Accepted does not mean downloaded.</strong><p class="mt-2 text-sm leading-relaxed">An HTTP <code>202 Accepted</code> means the request was submitted. The queue shows the subsequent work. Likewise, yt-dlp finishing the transfer is only one stage: uploads, metadata, cleanup and finalization still follow.</p></aside><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · who owns what?</summary><div class="collapse-content prose-copy"><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Part</th><th>Responsibility</th></tr></thead><tbody><tr><td>WebAPI</td><td>Validate and submit requests; expose queue queries, history and live events.</td></tr><tr><td>DataBridge + Cleipnir</td><td>Orchestrate groups and item runs. Persist application state, attempts, warnings, leases and workflow progress.</td></tr><tr><td>Worker + yt-dlp</td><td>Discover media; fetch metadata; acquire and hash files; upload and delete artifacts.</td></tr><tr><td>Durable transport</td><td>Carry commands and results. Full uses NATS JetStream; Lite uses a SQLite durable queue behind the shared interfaces.</td></tr><tr><td>Database + storage</td><td>Database: searchable metadata and execution state. Storage backend: media and sidecar blobs selected by StorageKey.</td></tr><tr><td>Scheduler / background processors</td><td>Trigger creator scans and execute separately queued follow-up work such as audio renditions or chat ingestion.</td></tr></tbody></table></div><p class="source-note">Code reference: <a href="#source-1">[01]</a>, <a href="#source-2">[02]</a>, <a href="#source-3">[03]</a>, <a href="#source-8">[08]</a>, <a href="#source-19">[19]</a>, <a href="#source-26">[26]</a>, <a href="#source-27">[27]</a></p></div></details></section><section id="single" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">02 / Single download</p><h2>Follow one item, end to end.</h2><p class="section-lead">Discover → check → acquire → store → catalogue → finalize.</p><p>Imagine saving one video. FrostStream first asks what it is and whether that source version is already in the library. If it needs new bytes, a worker downloads them into temporary storage. The flow then turns those bytes into a durable, catalogued library item.</p><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-single">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">02 · The complete single-item pipeline</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="02 · The complete single-item pipeline"><svg class="diagram" viewBox="0 0 890 1110" style="min-width:760px" role="img" aria-labelledby="diagram-single-title diagram-single-desc"><title id="diagram-single-title">02 · The complete single-item pipeline</title><desc id="diagram-single-desc">Resolve settings and fetch metadata. Check source version; an unchanged source can link existing media. Otherwise acquire bytes and check the content hash. Duplicate bytes are cleaned up and linked. New content uploads primary media, info.json, .meta, then available extras; writes rich metadata, cleans temporary files and finalizes. Required failure or stop after side effects triggers compensation. Optional background follow-ups are queued separately.</desc><g class="node normal"><rect x="55" y="20" width="410" height="72" rx="10"/><text x="260.0" y="46" text-anchor="middle">Resolve settings + fetch metadata</text><text class="sub" x="260.0" y="76" text-anchor="middle">Worker reads the source first</text></g><polyline class="edge" points="260,92 260,130" marker-end="url(#arrow)"/><g class="node decision"><rect x="55" y="130" width="410" height="72" rx="10"/><text x="260.0" y="156" text-anchor="middle">Known source version?</text><text class="sub" x="260.0" y="186" text-anchor="middle">Unless ForceDownload is set</text></g><polyline class="edge" points="260,202 260,240" marker-end="url(#arrow)"/><text class="edge-label" x="280" y="226" text-anchor="middle">No</text><g class="node normal"><rect x="55" y="240" width="410" height="72" rx="10"/><text x="260.0" y="266" text-anchor="middle">Acquire media + hash bytes</text><text class="sub" x="260.0" y="296" text-anchor="middle">Worker: yt-dlp → temporary files</text></g><polyline class="edge" points="260,312 260,350" marker-end="url(#arrow)"/><g class="node decision"><rect x="55" y="350" width="410" height="72" rx="10"/><text x="260.0" y="376" text-anchor="middle">Content already stored?</text><text class="sub" x="260.0" y="406" text-anchor="middle">Reserve by XXH128 content hash</text></g><polyline class="edge" points="260,422 260,460" marker-end="url(#arrow)"/><text class="edge-label" x="280" y="446" text-anchor="middle">No</text><g class="node normal"><rect x="55" y="460" width="410" height="72" rx="10"/><text x="260.0" y="486" text-anchor="middle">Upload primary media</text><text class="sub" x="260.0" y="516" text-anchor="middle">Commit storage information</text></g><polyline class="edge" points="260,532 260,570" marker-end="url(#arrow)"/><g class="node normal"><rect x="55" y="570" width="410" height="72" rx="10"/><text x="260.0" y="596" text-anchor="middle">Upload required sidecars</text><text class="sub" x="260.0" y="626" text-anchor="middle">info.json → generated .meta</text></g><polyline class="edge" points="260,642 260,680" marker-end="url(#arrow)"/><g class="node normal"><rect x="55" y="680" width="410" height="72" rx="10"/><text x="260.0" y="706" text-anchor="middle">Upload available extras</text><text class="sub" x="260.0" y="736" text-anchor="middle">Thumbnail → captions → chat / emotes</text></g><polyline class="edge" points="260,752 260,790" marker-end="url(#arrow)"/><g class="node normal"><rect x="55" y="790" width="410" height="72" rx="10"/><text x="260.0" y="816" text-anchor="middle">Write rich metadata</text><text class="sub" x="260.0" y="846" text-anchor="middle">Read stored info.json; request search sync</text></g><polyline class="edge" points="260,862 260,900" marker-end="url(#arrow)"/><g class="node normal"><rect x="55" y="900" width="410" height="72" rx="10"/><text x="260.0" y="926" text-anchor="middle">Clean temporary files</text><text class="sub" x="260.0" y="956" text-anchor="middle">Cleanup failures become warnings</text></g><polyline class="edge" points="260,972 260,1010" marker-end="url(#arrow)"/><g class="node success"><rect x="55" y="1010" width="410" height="72" rx="10"/><text x="260.0" y="1036" text-anchor="middle">Finalize library links + run</text><text class="sub" x="260.0" y="1066" text-anchor="middle">Completed / CompletedWithWarnings</text></g><g class="node success"><rect x="565" y="130" width="285" height="72" rx="10"/><text x="707.5" y="156" text-anchor="middle">AlreadyDownloaded</text><text class="sub" x="707.5" y="186" text-anchor="middle">Link existing media</text></g><g class="node success"><rect x="565" y="350" width="285" height="72" rx="10"/><text x="707.5" y="376" text-anchor="middle">Clean temporary files</text><text class="sub" x="707.5" y="406" text-anchor="middle">Then AlreadyDownloaded</text></g><polyline class="edge" points="465,166 565,166" marker-end="url(#arrow)"/><text class="edge-label" x="515" y="154" text-anchor="middle">Yes</text><polyline class="edge" points="465,386 565,386" marker-end="url(#arrow)"/><text class="edge-label" x="515" y="374" text-anchor="middle">Yes</text><g class="node failure"><rect x="565" y="515" width="285" height="72" rx="10"/><text x="707.5" y="541" text-anchor="middle">Required stage fails / stop</text><text class="sub" x="707.5" y="571" text-anchor="middle">After side effects exist</text></g><g class="node failure"><rect x="565" y="640" width="285" height="72" rx="10"/><text x="707.5" y="666" text-anchor="middle">Compensate</text><text class="sub" x="707.5" y="696" text-anchor="middle">Undo recorded storage + DB work</text></g><g class="node failure"><rect x="565" y="765" width="285" height="72" rx="10"/><text x="707.5" y="791" text-anchor="middle">Failed or Stopped</text><text class="sub" x="707.5" y="821" text-anchor="middle">Residuals recorded if cleanup fails</text></g><polyline class="edge" points="707,587 707,640" marker-end="url(#arrow)"/><polyline class="edge" points="707,712 707,765" marker-end="url(#arrow)"/><polyline class="edge dashed" points="465,496 520,496 520,551 565,551" marker-end="url(#arrow)"/><text class="lane-label" x="555" y="905">OPTIONAL FOLLOW-UP</text><g class="node normal"><rect x="565" y="935" width="285" height="72" rx="10"/><text x="707.5" y="961" text-anchor="middle">Audio rendition / chat ingest</text><text class="sub" x="707.5" y="991" text-anchor="middle">Queued separately when enabled</text></g><polyline class="edge dashed" points="465,1046 707,1046 707,1007" marker-end="url(#arrow)"/></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">This is execution order, not the numeric order of the stage enum. Retry loops and stop checks surround these stages; the recovery section shows their outcomes.</figcaption></figure><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · two different duplicate checks</summary><div class="collapse-content prose-copy"><p><strong>Before downloading:</strong> compare the provider, source media ID and last-modified value with the stored source mapping. Equal last-modified values (including equal nulls) can return <code>AlreadyDownloaded</code>. <code>ForceDownload</code> bypasses this source-version shortcut.</p><p><strong>After downloading:</strong> use the acquired file’s XXH128 content hash when reserving its media version. If that content is already stored, clean temporary files and link the existing media. Force does not turn off this content check.</p><p>The duplicate paths can still request an audio rendition when needed. A duplicate result is a useful terminal outcome, not an error.</p><p class="source-note">Code reference: <a href="#source-1">[01]</a>, <a href="#source-11">[11]</a></p></div></details><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · what has to be saved?</summary><div class="collapse-content prose-copy"><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Artifact / operation</th><th>Policy</th><th>Why it matters</th></tr></thead><tbody><tr><td>Primary media</td><td>Required</td><td>The video or audio file itself; hash verification can check bytes during upload.</td></tr><tr><td>yt-dlp <code>info.json</code></td><td>Required for successful rich metadata</td><td>Uploaded when present. If absent, the later rich-metadata stage fails with <code>info_json_missing</code>.</td></tr><tr><td>Generated <code>.meta</code></td><td>Required</td><td>FrostStream’s metadata sidecar, including identity/hash information.</td></tr><tr><td>Thumbnail and captions</td><td>Optional, when available</td><td>Ordinary failures become warnings after retries. Only successfully uploaded captions enter the metadata rows.</td></tr><tr><td>Live-chat replay and emote map</td><td>Optional, when available</td><td>Archive blobs even when chat ingestion is disabled. Upload the emote map only after the chat upload succeeds.</td></tr><tr><td>Rich metadata + finalization</td><td>Required</td><td>Read stored info.json, write catalogue data, then commit source mapping, playlist membership and terminal status.</td></tr><tr><td>Temporary-file cleanup</td><td>Attempted with retries</td><td>Ordinary cleanup failures are recorded as warnings.</td></tr></tbody></table></div><p>Optional does not mean every failure is harmless: interruption or Stop can abort the run and require compensation. A worker result of <code>DownloadCompleted</code> refers to media acquisition; the job is not finished until finalization.</p><p class="source-note">Code reference: <a href="#source-1">[01]</a>, <a href="#source-8">[08]</a>, <a href="#source-10">[10]</a></p></div></details><aside class="my-7 border-l-4 border-accent bg-base-200 px-6 py-5"><strong>The finish line is a library item.</strong><p class="mt-2 text-sm leading-relaxed">A successful finalization records <code>Completed</code> or <code>CompletedWithWarnings</code>. Audio rendition and enabled chat ingestion are queued separately afterward; their completion is not a prerequisite for the download’s terminal status. Metadata/search synchronization is requested during rich metadata writing.</p></aside></section><section id="playlist" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">03 / Playlist</p><h2>One list becomes many journeys.</h2><p class="section-lead">Expansion organizes the collection. Each child owns its own success or failure.</p><p>A playlist is an ordered list of items, so the first job is to discover that list. The group workflow gathers metadata pages, saves their entries, and creates a separate download request for each eligible item. Each child then follows the single-item pipeline above.</p><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-playlist">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">03 · Expand once. Download independently.</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="03 · Expand once. Download independently."><svg class="diagram" viewBox="0 0 990 650" style="min-width:760px" role="img" aria-labelledby="diagram-playlist-title diagram-playlist-desc"><title id="diagram-playlist-title">03 · Expand once. Download independently.</title><desc id="diagram-playlist-desc">Playlist pages are fetched and staged until complete. Ignore rules are applied to staged entries. Each eligible entry produces a stable job request and independent download flow. Children run as capacity allows and update aggregate group totals; one failure does not stop its siblings.</desc><g class="node normal"><rect x="20" y="30" width="250" height="72" rx="10"/><text x="145.0" y="56" text-anchor="middle">Submit playlist URL</text><text class="sub" x="145.0" y="86" text-anchor="middle">Explicit endpoint or URL routing</text></g><g class="node flow"><rect x="350" y="30" width="260" height="72" rx="10"/><text x="480.0" y="56" text-anchor="middle">Create / reuse playlist</text><text class="sub" x="480.0" y="86" text-anchor="middle">DownloadGroupV2Flow</text></g><g class="node normal"><rect x="690" y="30" width="250" height="72" rx="10"/><text x="815.0" y="56" text-anchor="middle">Fetch flat metadata page</text><text class="sub" x="815.0" y="86" text-anchor="middle">Worker · up to 5,000 entries</text></g><polyline class="edge" points="270,66 350,66" marker-end="url(#arrow)"/><polyline class="edge" points="610,66 690,66" marker-end="url(#arrow)"/><g class="node normal"><rect x="690" y="155" width="250" height="72" rx="10"/><text x="815.0" y="181" text-anchor="middle">Save page + staging rows</text><text class="sub" x="815.0" y="211" text-anchor="middle">Continue until page is complete</text></g><polyline class="edge" points="815,102 815,155" marker-end="url(#arrow)"/><polyline class="edge" points="940,191 965,191 965,12 815,12 815,30" marker-end="url(#arrow)"/><text class="edge-label" x="890" y="137" text-anchor="middle">More pages</text><g class="node decision"><rect x="350" y="155" width="260" height="72" rx="10"/><text x="480.0" y="181" text-anchor="middle">All pages collected</text><text class="sub" x="480.0" y="211" text-anchor="middle">Read entries; apply ignore rules</text></g><polyline class="edge" points="690,191 610,191" marker-end="url(#arrow)"/><text class="edge-label" x="650" y="180" text-anchor="middle">Done</text><g class="node normal"><rect x="20" y="155" width="250" height="72" rx="10"/><text x="145.0" y="181" text-anchor="middle">Ignored entry</text><text class="sub" x="145.0" y="211" text-anchor="middle">Recorded; no child published</text></g><polyline class="edge" points="350,191 270,191" marker-end="url(#arrow)"/><text class="edge-label" x="310" y="179" text-anchor="middle">Match</text><polyline class="edge" points="480,227 480,290" marker-end="url(#arrow)"/><g class="node flow"><rect x="350" y="290" width="260" height="72" rx="10"/><text x="480.0" y="316" text-anchor="middle">Publish child requests</text><text class="sub" x="480.0" y="346" text-anchor="middle">Stable IDs + same CorrelationId</text></g><polyline class="edge" points="480,362 480,391 160,391 160,420" marker-end="url(#arrow)"/><g class="node flow"><rect x="30" y="420" width="260" height="72" rx="10"/><text x="160.0" y="446" text-anchor="middle">Item A</text><text class="sub" x="160.0" y="476" text-anchor="middle">Independent DownloadJobV2Flow</text></g><polyline class="edge" points="480,362 480,391 480,391 480,420" marker-end="url(#arrow)"/><g class="node flow"><rect x="350" y="420" width="260" height="72" rx="10"/><text x="480.0" y="446" text-anchor="middle">Item B</text><text class="sub" x="480.0" y="476" text-anchor="middle">Independent DownloadJobV2Flow</text></g><polyline class="edge" points="480,362 480,391 800,391 800,420" marker-end="url(#arrow)"/><g class="node flow"><rect x="670" y="420" width="260" height="72" rx="10"/><text x="800.0" y="446" text-anchor="middle">Item C</text><text class="sub" x="800.0" y="476" text-anchor="middle">Independent DownloadJobV2Flow</text></g><g class="node success"><rect x="350" y="552" width="260" height="72" rx="10"/><text x="480.0" y="578" text-anchor="middle">Group totals update</text><text class="sub" x="480.0" y="608" text-anchor="middle">Success, warnings, failures</text></g><polyline class="edge" points="160,492 160,525 480,525 480,552" marker-end="url(#arrow)"/><polyline class="edge" points="480,492 480,525 480,525 480,552" marker-end="url(#arrow)"/><polyline class="edge" points="800,492 800,525 480,525 480,552" marker-end="url(#arrow)"/></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">A playlist coordinator finishes its fan-out without waiting for every video to finish. The persisted group summary continues to change as children settle. Concurrency depends on worker capacity.</figcaption></figure><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>What a reader sees</th><th>What happens underneath</th></tr></thead><tbody><tr><td>A playlist starts expanding</td><td>Create or reuse its playlist row, then fetch flat metadata in pages of up to 5,000 entries.</td></tr><tr><td>Items appear in the queue</td><td>After all pages are staged, evaluate title ignore rules. Record ignored entries; publish children for the others.</td></tr><tr><td>Some items finish; others fail</td><td>Independent child flows allow siblings to keep working. Group totals summarize their outcomes.</td></tr><tr><td>A playlist item was already saved</td><td>The ordinary duplicate checks can reuse existing media and link it to the playlist.</td></tr><tr><td>Stop the playlist</td><td>Stop expansion and request Stop for existing children. Starting the group later starts its existing Stopped/Failed jobs; it does not resume an interrupted expansion.</td></tr></tbody></table></div><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · stable fan-out and settings</summary><div class="collapse-content prose-copy"><p>The group persists page results with <code>Capture</code>. It rejects a non-advancing next-page index. A child JobId is derived from <code>playlistId + playlistIndex + entryUrl</code>; its message ID is derived from <code>groupId + jobId</code>. These stable IDs support safe redelivery.</p><p>Each child inherits resolved storage, worker tag, yt-dlp options, cookies, priority, comments preference and the audio-rendition flag. It keeps the collection’s <code>CorrelationId</code> and has <code>SourceKind.Playlist</code>.</p><p>The direct-download endpoint recognizes playlist-container URLs and reroutes them. That route drops direct-only <code>ForceDownload</code> and tags because <code>PlaylistRequested</code> has no fields for them; there is a separate per-entry force-queue action.</p><p>The group publishes children through ordinary ingress. It deliberately avoids invoking a child inline or scheduling it as a lifecycle-dependent child of this short-lived coordinator.</p><p class="source-note">Code reference: <a href="#source-2">[02]</a>, <a href="#source-3">[03]</a>, <a href="#source-4">[04]</a>, <a href="#source-12">[12]</a></p></div></details></section><section id="creator" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">04 / Creator / channel</p><h2>Keep up with a changing source.</h2><p class="section-lead">A one-off download gathers eligible items. Monitoring watches for new or changed ones.</p><p>A creator’s channel changes over time. FrostStream keeps a discovery catalogue so it can tell new or changed entries from entries it has already seen. A one-off channel download and an ongoing creator monitor use that same discovery machinery, with different selection rules.</p><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-channel">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">04 · A creator is a changing catalogue.</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="04 · A creator is a changing catalogue."><svg class="diagram" viewBox="0 0 950 640" style="min-width:760px" role="img" aria-labelledby="diagram-channel-title diagram-channel-desc"><title id="diagram-channel-title">04 · A creator is a changing catalogue.</title><desc id="diagram-channel-desc">Manual channel downloads create a group and run a full scan. Scheduled creator monitoring and Scan now invoke discovery directly. Scans read one bounded page, persist batches of 100 candidates, apply ignore and stop rules, then queue eligible items. Manual downloads queue all eligible items from the page; ordinary monitoring queues new or changed items. A full page saves a cursor for a later scan.</desc><g class="node flow"><rect x="20" y="25" width="400" height="72" rx="10"/><text x="220.0" y="51" text-anchor="middle">Download this channel</text><text class="sub" x="220.0" y="81" text-anchor="middle">Manual action → group → full scan</text></g><g class="node normal"><rect x="520" y="25" width="400" height="72" rx="10"/><text x="720.0" y="51" text-anchor="middle">Monitor this creator</text><text class="sub" x="720.0" y="81" text-anchor="middle">Scheduler / Scan now → full or refresh scan</text></g><polyline class="edge" points="220,97 220,132 470,132 470,160" marker-end="url(#arrow)"/><polyline class="edge" points="720,97 720,132 470,132" marker-end="url(#arrow)"/><g class="node normal"><rect x="270" y="160" width="400" height="72" rx="10"/><text x="470.0" y="186" text-anchor="middle">Discover one scan page</text><text class="sub" x="470.0" y="216" text-anchor="middle">Full: up to 5,000 · refresh: up to 500</text></g><polyline class="edge" points="470,232 470,275" marker-end="url(#arrow)"/><g class="node normal"><rect x="270" y="275" width="400" height="72" rx="10"/><text x="470.0" y="301" text-anchor="middle">Upsert candidates in batches of 100</text><text class="sub" x="470.0" y="331" text-anchor="middle">Remember identity, changes and scan cursor</text></g><polyline class="edge" points="270,311 210,311" marker-end="url(#arrow)"/><g class="node normal"><rect x="10" y="275" width="200" height="72" rx="10"/><text x="110.0" y="301" text-anchor="middle">Ignored / suppressed</text><text class="sub" x="110.0" y="331" text-anchor="middle">Save discovery only</text></g><polyline class="edge" points="470,347 470,400" marker-end="url(#arrow)"/><g class="node decision"><rect x="270" y="400" width="400" height="72" rx="10"/><text x="470.0" y="426" text-anchor="middle">Choose eligible items</text><text class="sub" x="470.0" y="456" text-anchor="middle">Manual: all eligible · monitor: new / changed</text></g><polyline class="edge" points="470,472 470,520" marker-end="url(#arrow)"/><g class="node flow"><rect x="270" y="520" width="400" height="72" rx="10"/><text x="470.0" y="546" text-anchor="middle">Publish DownloadRequested per item</text><text class="sub" x="470.0" y="576" text-anchor="middle">Ordinary ingress → independent item flows</text></g><g class="node normal"><rect x="720" y="275" width="205" height="72" rx="10"/><text x="822.5" y="301" text-anchor="middle">Next full-scan index</text><text class="sub" x="822.5" y="331" text-anchor="middle">Later scan continues here</text></g><polyline class="edge dashed" points="670,311 720,311" marker-end="url(#arrow)"/><text class="lane-label" x="32" y="565">DISCOVERY ≠ DOWNLOAD</text><text class="lane-label" x="32" y="591">A saved candidate can be ignored,</text><text class="lane-label" x="32" y="613">unchanged, queued or downloaded.</text></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">“Full scan” is paged: this worker processes one page per source per invocation. A full 5,000-item page stores a continuation index; it does not loop over the whole channel in this invocation.</figcaption></figure><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Path</th><th>Entry point</th><th>Which items become jobs?</th></tr></thead><tbody><tr><td>Download channel</td><td>API creates/reuses source → Channel group → full scan</td><td><code>QueueAllItems = true</code>: all eligible candidates in this scan page, including unchanged ones. Each child still performs duplicate checks unless source-check force is requested.</td></tr><tr><td>Recurring creator monitor</td><td>Scheduler → full scan or incremental refresh</td><td>Normally new or meaningfully changed candidates. Unchanged entries are updated in the discovery catalogue without another download request.</td></tr><tr><td>Scan now</td><td>Manual scan endpoint → discovery directly</td><td>Full or incremental discovery using ordinary new/changed selection. This is a different action from Download channel.</td></tr></tbody></table></div><aside class="my-7 border-l-4 border-accent bg-base-200 px-6 py-5"><strong>Ignore rules stick.</strong><p class="mt-2 text-sm leading-relaxed">For newly discovered items, a matching title rule records an ignored candidate and avoids enqueueing it. A creator item already marked Ignored remains ignored across later scans, including queue-all scans, until explicitly force-queued. Stopping a group suppresses new child requests while allowing discovery data to be saved.</p></aside><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · pagination, batching and group boundaries</summary><div class="collapse-content prose-copy"><p>Full scans use <code>NextFullScanStartIndex</code> (or 1) and examine at most 5,000 entries per source per invocation. Incremental scans start at 1 and clamp the configured page size to 1–500. Candidates are sent to DataBridge in batches of 100; an empty page still updates scan state.</p><p>DataBridge checks whether the group can accept children, resolves source config when appropriate, upserts discovery rows and publishes <code>DownloadRequested</code> for eligible candidates. Jobs are stable within the correlation/source/provider/extractor/media identity, while a later manual channel request can create fresh jobs under a new correlation.</p><p>A manual Channel group waits for an expansion success/failure/stop message and can retry retryable expansion failures. Scheduled scans and “Scan now” publish scan commands directly: they are not all wrapped in <code>DownloadGroupV2Flow</code>, even though the enum also defines <code>CreatorMonitor</code>.</p><p>Creator avatar/banner refresh is separate background work. It is not a prerequisite for every media download.</p><p class="source-note">Code reference: <a href="#source-2">[02]</a>, <a href="#source-5">[05]</a>, <a href="#source-13">[13]</a>, <a href="#source-14">[14]</a>, <a href="#source-15">[15]</a>, <a href="#source-23">[23]</a>, <a href="#source-24">[24]</a></p></div></details></section><section id="cleipnir" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">05 / Inside Cleipnir.Flows</p><h2>The coordinator remembers.</h2><p class="section-lead">Durable effects, message waits and immutable runs make the orchestration explicit.</p><p>Think of Cleipnir as a coordinator with a saved notebook. It records completed pieces of orchestration and waits for messages from workers. Workers perform the slow external operations; DataBridge decides which operation comes next and whether a reply still belongs to the current run.</p>
+<div class="grid gap-6 md:grid-cols-2 my-8"><div class="border-t-2 border-accent pt-5"><h3>One group flow</h3><p><code>DownloadGroupV2Flow</code> expands or routes a request. Its durable execution can end while children continue downloading. The group’s persisted aggregate is a separate concept.</p></div><div class="border-t-2 border-accent pt-5"><h3>One immutable item run</h3><p><code>DownloadJobV2Flow</code> owns exactly one run of one job. A user’s Start action creates a new RunId under the same JobId. It never restarts the old flow instance.</p></div></div><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-sequence">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">05 · One command, one validated result</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="05 · One command, one validated result"><svg class="diagram" viewBox="0 0 970 595" style="min-width:760px" role="img" aria-labelledby="diagram-sequence-title diagram-sequence-desc"><title id="diagram-sequence-title">05 · One command, one validated result</title><desc id="diagram-sequence-desc">The flow captures a command publication. Durable transport delivers it to a worker. The worker acquires and renews a lease through the DataBridge repository, executes the operation and publishes a result. The result consumer validates its execution identity and forwards the message to the exact Cleipnir instance. The flow then continues.</desc><g class="node normal"><rect x="10" y="10" width="170" height="48" rx="10"/><text x="95.0" y="39.0" text-anchor="middle">Flow</text></g><line class="lifeline" x1="95" y1="58" x2="95" y2="574"/><g class="node normal"><rect x="265" y="10" width="170" height="48" rx="10"/><text x="350.0" y="39.0" text-anchor="middle">Durable transport</text></g><line class="lifeline" x1="350" y1="58" x2="350" y2="574"/><g class="node normal"><rect x="520" y="10" width="170" height="48" rx="10"/><text x="605.0" y="39.0" text-anchor="middle">Worker</text></g><line class="lifeline" x1="605" y1="58" x2="605" y2="574"/><g class="node normal"><rect x="780" y="10" width="170" height="48" rx="10"/><text x="865.0" y="39.0" text-anchor="middle">DataBridge</text></g><line class="lifeline" x1="865" y1="58" x2="865" y2="574"/><polyline class="edge" points="95,110 350,110" marker-end="url(#arrow)"/><text class="edge-label" x="222.5" y="98" text-anchor="middle">1. Capture publish(command)</text><polyline class="edge" points="350,180 605,180" marker-end="url(#arrow)"/><text class="edge-label" x="477.5" y="168" text-anchor="middle">2. Deliver command</text><polyline class="edge dashed" points="605,250 865,250" marker-end="url(#arrow)"/><text class="edge-label" x="735.0" y="238" text-anchor="middle">3. Lease RPC to DataBridge repository</text><polyline class="edge" points="605,330 350,330" marker-end="url(#arrow)"/><text class="edge-label" x="477.5" y="318" text-anchor="middle">4. Publish success or failure</text><polyline class="edge" points="350,400 865,400" marker-end="url(#arrow)"/><text class="edge-label" x="607.5" y="388" text-anchor="middle">5. Deliver result</text><polyline class="edge" points="865,480 95,480" marker-end="url(#arrow)"/><text class="edge-label" x="480.0" y="468" text-anchor="middle">6. Validate identity → SendMessage</text><text class="lane-label" x="115" y="550">7. Matching message resumes the flow</text></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">The lease RPC uses DataBridge’s repository (shown in the right-hand DataBridge lane); result delivery uses its event consumer. The flow waits for a result message, so an HTTP request does not remain open for the download.</figcaption></figure><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Identity</th><th>Plain language</th><th>Technical purpose</th></tr></thead><tbody><tr><td><code>CorrelationId / GroupId</code></td><td>The batch this work belongs to</td><td>Connect related items and group controls. Group instance: <code>{groupId:N}</code>.</td></tr><tr><td><code>JobId</code></td><td>The item’s tracking record</td><td>Stable across user-created reruns of that job.</td></tr><tr><td><code>RunId</code></td><td>This particular try at the whole download</td><td>Job flow instance: <code>{jobId:N}-{runId:N}</code>.</td></tr><tr><td><code>Stage + Attempt + DispatchId</code></td><td>This operation, this attempt</td><td>Distinguish retries and reject replies for an old dispatch. ArtifactKey distinguishes individual sidecars.</td></tr><tr><td><code>MessageId / OperationKey</code></td><td>The envelope and logical operation</td><td>Message processing and Cleipnir mailbox idempotency help prevent duplicate advancement.</td></tr></tbody></table></div><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · Capture, Messages and the two ledgers</summary><div class="collapse-content prose-copy"><p><code>Capture(...)</code> is used around configuration resolution, generated IDs, repository operations, command publication and retry waits. Cleipnir persists completed effects/results so workflow re-entry can use recorded results. This is not a blanket guarantee that an external operation happens exactly once: message IDs, database checks and execution leases also protect the boundaries.</p><p><code>Messages.OfTypes&lt;Success, Failure&gt;().First()</code> waits for a stage result. The invocation can suspend while waiting. The event consumer checks the authoritative current execution, releases its lease, records history, then calls <code>flows.SendMessage(instance, event, idempotencyKey: OperationKey)</code>. Stale or duplicate results are acknowledged without advancing the run.</p><p><strong>Workflow store:</strong> parameters, effects, ordered messages, execution state and related runtime records. <strong>Application store:</strong> jobs, immutable runs, stage attempts, artifacts, warnings, leases, groups and library data. Queue state is driven by the application records.</p><p>Full uses PostgreSQL workflow persistence; Lite uses <code>SqliteFunctionStore</code>. The pinned Cleipnir packages are 4.2.5. Automatic flow registration and <code>NodaTimeFlowSerializer</code> are configured in DataBridge so persisted timestamps retain their meaning.</p><p class="source-note">Code reference: <a href="#source-1">[01]</a>, <a href="#source-6">[06]</a>, <a href="#source-9">[09]</a>, <a href="#source-18">[18]</a>, <a href="#source-19">[19]</a>, <a href="#source-20">[20]</a>, <a href="#source-25">[25]</a></p></div></details><aside class="my-7 border-l-4 border-accent bg-base-200 px-6 py-5"><strong>Durable waiting is not automatic restart recovery.</strong><p class="mt-2 text-sm leading-relaxed">Within a running DataBridge generation, the flow can wait and continue from recorded progress. On a DataBridge restart, FrostStream deliberately invalidates unfinished download workflows. The policy below takes precedence over the workflow engine’s general recovery capability.</p></aside></section><section id="recovery" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">06 / Failures & control</p><h2>What happens off the happy path?</h2><p class="section-lead">Retries, warnings, Stop and interruption each have a different meaning.</p><p>A slow network, a missing optional thumbnail, a user pressing Stop and a worker disappearing are different events. FrostStream records those differences instead of treating every problem as another download retry.</p><figure class="my-7 overflow-hidden rounded-box border border-base-300 bg-base-100" id="diagram-recovery">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-5 py-3"><span class="text-xs font-bold uppercase tracking-widest">06 · Recovery has different outcomes.</span><span class="text-xs text-base-content/65">Diagram · scroll horizontally on small screens</span></div>
+    <div class="diagram-scroll overflow-x-auto p-3 sm:p-5" tabindex="0" role="region" aria-label="06 · Recovery has different outcomes."><svg class="diagram" viewBox="0 0 970 575" style="min-width:760px" role="img" aria-labelledby="diagram-recovery-title diagram-recovery-desc"><title id="diagram-recovery-title">06 · Recovery has different outcomes.</title><desc id="diagram-recovery-desc">Retryable failures can retry up to three attempts with a five-second delay. Exhausted required work fails; if side effects exist, compensation is attempted first. Ordinary optional upload failure is a warning. Stop also triggers cleanup when needed. Worker interruption is handled separately and is not downgraded to an optional warning.</desc><g class="node flow"><rect x="340" y="20" width="280" height="72" rx="10"/><text x="480.0" y="46" text-anchor="middle">Running stage</text><text class="sub" x="480.0" y="76" text-anchor="middle">An attempt has its own DispatchId</text></g><polyline class="edge" points="480,92 480,122 155,122 155,155" marker-end="url(#arrow)"/><g class="node normal"><rect x="15" y="155" width="280" height="72" rx="10"/><text x="155.0" y="181" text-anchor="middle">Retryable failure</text><text class="sub" x="155.0" y="211" text-anchor="middle">Unknown / Transient / Timeout</text></g><polyline class="edge" points="480,92 480,122 480,122 480,155" marker-end="url(#arrow)"/><g class="node failure"><rect x="340" y="155" width="280" height="72" rx="10"/><text x="480.0" y="181" text-anchor="middle">Required failure or Stop</text><text class="sub" x="480.0" y="211" text-anchor="middle">Side effects may already exist</text></g><polyline class="edge" points="480,92 480,122 805,122 805,155" marker-end="url(#arrow)"/><g class="node normal"><rect x="665" y="155" width="280" height="72" rx="10"/><text x="805.0" y="181" text-anchor="middle">Optional upload failure</text><text class="sub" x="805.0" y="211" text-anchor="middle">Except interruption / cancellation</text></g><g class="node normal"><rect x="15" y="290" width="280" height="72" rx="10"/><text x="155.0" y="316" text-anchor="middle">RetryWaiting → retry</text><text class="sub" x="155.0" y="346" text-anchor="middle">Up to 3 attempts; 5 seconds apart</text></g><polyline class="edge" points="155,227 155,290" marker-end="url(#arrow)"/><g class="node failure"><rect x="340" y="290" width="280" height="72" rx="10"/><text x="480.0" y="316" text-anchor="middle">Compensating</text><text class="sub" x="480.0" y="346" text-anchor="middle">Delete artifacts + temp + new DB rows</text></g><polyline class="edge" points="480,227 480,290" marker-end="url(#arrow)"/><g class="node success"><rect x="665" y="290" width="280" height="72" rx="10"/><text x="805.0" y="316" text-anchor="middle">Record a warning; continue</text><text class="sub" x="805.0" y="346" text-anchor="middle">May finish CompletedWithWarnings</text></g><polyline class="edge" points="805,227 805,290" marker-end="url(#arrow)"/><g class="node failure"><rect x="340" y="435" width="280" height="72" rx="10"/><text x="480.0" y="461" text-anchor="middle">Failed / Stopped</text><text class="sub" x="480.0" y="491" text-anchor="middle">Incomplete cleanup: residual warning</text></g><polyline class="edge" points="480,362 480,435" marker-end="url(#arrow)"/><polyline class="edge" points="295,326 320,326 320,191 340,191" marker-end="url(#arrow)"/><text class="edge-label" x="260" y="265" text-anchor="middle">Exhausted*</text><text class="lane-label" x="20" y="550">* Required work fails after retries. Optional uploads and ordinary temp cleanup can settle as warnings.</text></svg></div>
+    <figcaption class="border-t border-base-300 px-5 py-4 text-sm text-base-content/75">Before artifacts exist, a required failure can fail the run directly. Worker lease expiry and DataBridge restart use the interruption policies below; they do not guarantee that compensation runs.</figcaption></figure><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Situation</th><th>Implemented behavior</th><th>What happens next</th></tr></thead><tbody><tr><td>Transient / timeout / unknown failure</td><td>Up to 3 stage attempts, separated by a 5-second retry delay. Collection expansion has the same attempt/delay limits.</td><td>Retry the stage. Exhausted required work fails; optional work can warn.</td></tr><tr><td>Provider blocks downloads</td><td>The metadata/acquire failure can open a provider circuit and fail the run. New matching work is prevented from starting.</td><td>Clear the circuit before starting affected jobs again.</td></tr><tr><td>User presses Stop</td><td>Queued work can stop immediately. Active work gets a stop signal; the worker cancels and stage boundaries settle the run. Uploaded work may need compensation.</td><td>Stopped after settlement, or Failed if cleanup is incomplete.</td></tr><tr><td>Worker stops heartbeating</td><td>Execution lease lasts 45 seconds; worker renewal interval is 15 seconds. A monitor checks every 5 seconds. Expired leases fail the run and delete its flow instance.</td><td>Manual Start creates a fresh run. Uncertain uploads are marked Residual; deletion is not assumed.</td></tr><tr><td>Required artifact / metadata failure</td><td>Attempt to delete recorded artifacts, temporary files, the reserved version and newly created media identity as appropriate.</td><td>Failed, or Stopped if Stop was requested. Incomplete compensation records residual warnings and <code>compensation_incomplete</code>.</td></tr><tr><td>Optional artifact or ordinary temp cleanup failure</td><td>Record a warning after allowed retries and continue when the failure is not a run-level interruption.</td><td>Successful finalization may become CompletedWithWarnings.</td></tr></tbody></table></div><h3 class="mt-10">When DataBridge restarts</h3><p>The startup gate runs before download consumers become ready. It deletes unfinished item flow instances and group flow instances, reconciles records, expires leases and establishes a new generation boundary.</p><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Before restart</th><th>After reconciliation</th></tr></thead><tbody><tr><td>Queued job / run</td><td>Stopped — <code>service_restarted_before_start</code>.</td></tr><tr><td>Running, Stopping or Compensating job / run</td><td>Failed / Interrupted — <code>service_restarted</code>.</td></tr><tr><td>Active group</td><td>Marked failed during reconciliation; child aggregate updates may refine the displayed group outcome.</td></tr><tr><td>Old queued request arrives after startup</td><td>Generation checks prevent silent auto-start of old work.</td></tr><tr><td>User selects Start</td><td>A Stopped/Failed job receives a new RunId and begins the pipeline again. Existing history stays available.</td></tr></tbody></table></div><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · Stop, leases and honest cleanup guarantees</summary><div class="collapse-content prose-copy"><p>Stop is both a persisted decision and a signal. DataBridge sends a message to the exact run and publishes a worker-cancellation signal. A command dispatched just before Stop can acquire a lease marked stop-requested and immediately cancel, allowing the waiting flow to receive a terminal reply.</p><p>Lease expiry takes a different route: the monitor fails the run and deletes its workflow. An upload may already have reached storage, so records of uncertain uploads become <code>Residual</code>. Neither this interruption path nor startup reconciliation promises to execute the normal in-flow compensation sequence.</p><p>The monitor also checks older active runs for a missing or terminal Cleipnir instance and turns that inconsistency into an explicit failure rather than leaving the job Running forever.</p><p>Start group visits existing Stopped/Failed child jobs. It does not create a new expansion coordinator or rediscover items that were never fanned out; submit the collection again when you need another expansion.</p><p class="source-note">Code reference: <a href="#source-10">[10]</a>, <a href="#source-16">[16]</a>, <a href="#source-17">[17]</a></p></div></details></section><section id="walk" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">07 / Interactive walkthrough</p><h2>Take a request through the system.</h2><p class="section-lead">A short guided tour for readers who prefer to learn one step at a time.</p><p>Choose a path, then step through an illustrative successful request. This is an explanation of the code paths, not a connection to a running queue.</p>
+<div class="my-7 rounded-box border border-base-300 bg-base-100 p-5 sm:p-8" id="walkthrough">
+<div class="flex flex-wrap gap-2" role="group" aria-label="Choose a download walkthrough"><button class="btn btn-sm" data-journey="single" aria-pressed="true">Single download</button><button class="btn btn-sm" data-journey="playlist" aria-pressed="false">Playlist</button><button class="btn btn-sm" data-journey="channel" aria-pressed="false">Channel / creator</button></div>
+<div class="grid gap-8 md:grid-cols-[0.85fr_1.15fr] mt-8"><ol id="walk-steps" class="walk-steps" aria-label="Walkthrough steps"></ol><div class="border-l-2 border-accent pl-6" aria-live="polite" aria-atomic="true"><p class="eyebrow" id="walk-count"></p><h3 id="walk-title" class="text-2xl! mt-3!"></h3><p id="walk-copy" class="mt-4"></p><div class="mt-6 text-sm"><span class="badge" id="walk-owner"></span><p class="mt-3"><strong>Code:</strong> <code id="walk-code"></code></p></div></div></div>
+<div class="flex items-center justify-between mt-8 border-t border-base-300 pt-5"><button class="btn btn-sm" id="walk-back">← Previous</button><span class="text-xs text-base-content/65">Illustrative happy path</span><button class="btn btn-sm" id="walk-next">Next →</button></div></div>
+<noscript><p>The walkthrough requires JavaScript. Every process is also explained in the static diagrams and text above.</p></noscript></section><section id="queue" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">08 / Reading the queue</p><h2>Understand the outcome.</h2><p class="section-lead">A progress bar describes activity. The final state describes the result.</p><p>The queue is your view into the application’s records. Live progress helps explain what the worker is doing, while terminal status tells you what the complete workflow achieved.</p><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody><tr><td>Queued / Running</td><td>Waiting to begin / actively executing a run. WaitingForWorker and RetryWaiting describe more precise stage conditions.</td></tr><tr><td>Completed</td><td>Required download work and finalization succeeded.</td></tr><tr><td>CompletedWithWarnings</td><td>The download finished, with recorded issues such as missing optional artifacts or incomplete temporary-file cleanup.</td></tr><tr><td>AlreadyDownloaded</td><td>An existing source version or stored content was reused.</td></tr><tr><td>Ignored</td><td>An entry was deliberately excluded by a rule; it was not downloaded by that request.</td></tr><tr><td>Stopping / Compensating</td><td>Cancellation or rollback is still being settled. These are not final success states.</td></tr><tr><td>Stopped / Failed</td><td>This run ended without successful finalization. Start can create a fresh run when allowed.</td></tr><tr><td>Group CompletedWithFailures</td><td>The collection has child failures. This does not erase successful siblings.</td></tr></tbody></table></div><details class="collapse collapse-arrow border border-base-300 bg-base-100 my-4 technical"><summary class="collapse-title font-semibold">Technical view · progress is advisory, state is authoritative</summary><div class="collapse-content prose-copy"><p>The Worker publishes <code>DownloadProgress</code> frames over the live message bus. The API’s <code>DownloadQueueHub</code> forwards them through Server-Sent Events (SSE), with per-job coalescing. The queue controller also exposes queries for snapshots, detail and history.</p><p>Live streams have no replay and do not automatically close when a job finishes. DataBridge separately persists throttled progress log lines for later inspection. A percentage or yt-dlp “finished” message does not itself advance the durable flow; validated result events and repository transitions do.</p><p class="source-note">Code reference: <a href="#source-8">[08]</a>, <a href="#source-9">[09]</a>, <a href="#source-21">[21]</a>, <a href="#source-22">[22]</a></p></div></details><h3 class="mt-10">A short glossary</h3><div class="my-6 overflow-x-auto rounded-box border border-base-300"><table class="table"><thead><tr><th>Word</th><th>In everyday language</th></tr></thead><tbody><tr><td>Flow</td><td>A saved program that coordinates a process and can wait for messages.</td></tr><tr><td>Fan-out</td><td>Turn one collection request into many independent item requests.</td></tr><tr><td>Sidecar</td><td>A companion file such as metadata, captions, a thumbnail or chat replay.</td></tr><tr><td>Lease</td><td>A time-limited claim that a particular worker is handling an operation.</td></tr><tr><td>Idempotency</td><td>Make receiving the same logical request again safe to handle.</td></tr><tr><td>Compensation</td><td>Explicitly undo effects of an incomplete operation, such as deleting uploaded files.</td></tr><tr><td>Residual artifact</td><td>A file that may still exist after interrupted or unsuccessful cleanup.</td></tr><tr><td>Provider circuit</td><td>A persistent block on starting downloads from a provider that has rejected access.</td></tr></tbody></table></div></section><section id="sources" class="doc-section pt-16 sm:pt-24"><p class="eyebrow">09 / Source map</p><h2>Trace every explanation to code.</h2><p class="section-lead">A guide to this implementation, grounded in the repository.</p><p>This guide describes the code in this checkout at <code>37ed0b8</code>, inspected on <time datetime="2026-11-14">14 November 2026</time>. It documents the implemented Download V2 behavior, including the intentional restart policy. It is not a report of a live download or a guarantee about remote provider behavior.</p><p>Source links are relative to this file in <code>docs/</code>. If you share the HTML by itself, the diagrams and interactions still work offline; source links require the repository alongside it. Line ranges below are reference hints for this snapshot.</p><ol class="source-list mt-7"><li id="source-1"><span class="source-number">01</span><div><a href="../src/Shared/Modules/DataBridge/Flows/DownloadJobV2Flow.cs">DownloadJobV2Flow.cs</a><p>Per-item sequence, retries, artifact policy, compensation and follow-up work.</p><code>src/Shared/Modules/DataBridge/Flows/DownloadJobV2Flow.cs</code><small>Lines / locator: 42–414; 447–1239</small></div></li><li id="source-2"><span class="source-number">02</span><div><a href="../src/Shared/Modules/DataBridge/Flows/DownloadGroupV2Flow.cs">DownloadGroupV2Flow.cs</a><p>Direct requests, paged playlist expansion, channel supervision, independent children.</p><code>src/Shared/Modules/DataBridge/Flows/DownloadGroupV2Flow.cs</code><small>Lines / locator: 30–295</small></div></li><li id="source-3"><span class="source-number">03</span><div><a href="../src/Shared/Modules/Api/Features/Downloads/Controllers/DownloadsController.cs">DownloadsController.cs</a><p>Submission, settings resolution and automatic playlist URL routing.</p><code>src/Shared/Modules/Api/Features/Downloads/Controllers/DownloadsController.cs</code><small>Lines / locator: 28–238</small></div></li><li id="source-4"><span class="source-number">04</span><div><a href="../src/Shared/Modules/Api/Features/Playlists/Controllers/PlaylistsController.cs">PlaylistsController.cs</a><p>Explicit playlist submission and request options.</p><code>src/Shared/Modules/Api/Features/Playlists/Controllers/PlaylistsController.cs</code><small>Lines / locator: 32–134</small></div></li><li id="source-5"><span class="source-number">05</span><div><a href="../src/Shared/Modules/Api/Features/CreatorMonitor/Controllers/CreatorMonitorController.cs">CreatorMonitorController.cs</a><p>Manual channel downloads and Scan now.</p><code>src/Shared/Modules/Api/Features/CreatorMonitor/Controllers/CreatorMonitorController.cs</code><small>Lines / locator: 68–175; 298–372</small></div></li><li id="source-6"><span class="source-number">06</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadRequestedIngressService.cs">DownloadRequestedIngressService.cs</a><p>Deduplication, generation boundary and immutable job-flow launch.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadRequestedIngressService.cs</code><small>Lines / locator: 26–70</small></div></li><li id="source-7"><span class="source-number">07</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadGroupRequestedIngressService.cs">DownloadGroupRequestedIngressService.cs</a><p>Group acceptance and durable coordinator launch.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadGroupRequestedIngressService.cs</code><small>Lines / locator: 27–60</small></div></li><li id="source-8"><span class="source-number">08</span><div><a href="../src/Shared/Modules/Worker/Services/DownloadCommandsConsumerService.cs">DownloadCommandsConsumerService.cs</a><p>Worker commands, yt-dlp, hashing, storage operations, leases and heartbeats.</p><code>src/Shared/Modules/Worker/Services/DownloadCommandsConsumerService.cs</code><small>Lines / locator: 63–65; 174–479; 612 onward</small></div></li><li id="source-9"><span class="source-number">09</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadEventsConsumerService.cs">DownloadEventsConsumerService.cs</a><p>Current-execution validation and message delivery to Cleipnir.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadEventsConsumerService.cs</code><small>Lines / locator: 47–101</small></div></li><li id="source-10"><span class="source-number">10</span><div><a href="../src/Shared/Modules/DataBridge/Data/DownloadFlowV2Repository.cs">DownloadFlowV2Repository.cs</a><p>Fresh runs, Stop, finalization, leases, reconciliation, group totals and provider circuits.</p><code>src/Shared/Modules/DataBridge/Data/DownloadFlowV2Repository.cs</code><small>Lines / locator: 146–337; 561–629; 988–1343</small></div></li><li id="source-11"><span class="source-number">11</span><div><a href="../src/Shared/Modules/DataBridge/Data/DownloadJobsRepository.cs">DownloadJobsRepository.cs</a><p>Source-version comparison and content-hash version reservation.</p><code>src/Shared/Modules/DataBridge/Data/DownloadJobsRepository.cs</code><small>Lines / locator: 194–217; 271–383</small></div></li><li id="source-12"><span class="source-number">12</span><div><a href="../src/Shared/Modules/Worker/Services/PlaylistCommandsConsumerService.cs">PlaylistCommandsConsumerService.cs</a><p>Flat playlist extraction, page limits and completion rules.</p><code>src/Shared/Modules/Worker/Services/PlaylistCommandsConsumerService.cs</code><small>Lines / locator: 27–163</small></div></li><li id="source-13"><span class="source-number">13</span><div><a href="../src/Shared/Modules/Worker/Services/ChannelDiscoveryConsumerService.cs">ChannelDiscoveryConsumerService.cs</a><p>Scan entry paths, batching, limits and continuation cursor.</p><code>src/Shared/Modules/Worker/Services/ChannelDiscoveryConsumerService.cs</code><small>Lines / locator: 26–28; 75–168; 221–393</small></div></li><li id="source-14"><span class="source-number">14</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/CreatorDiscoveryConsumerService.cs">CreatorDiscoveryConsumerService.cs</a><p>Stop-aware enqueue gate, child requests and source config resolution.</p><code>src/Shared/Modules/DataBridge/Messaging/CreatorDiscoveryConsumerService.cs</code><small>Lines / locator: 240–265; 446–480; 509–535</small></div></li><li id="source-15"><span class="source-number">15</span><div><a href="../src/Shared/Modules/DataBridge/Data/CreatorDiscoveryRepository.cs">CreatorDiscoveryRepository.cs</a><p>Candidate identity, new/changed decisions and persistent ignored state.</p><code>src/Shared/Modules/DataBridge/Data/CreatorDiscoveryRepository.cs</code><small>Lines / locator: 166–292</small></div></li><li id="source-16"><span class="source-number">16</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadAdminConsumerService.cs">DownloadAdminConsumerService.cs</a><p>Stop signaling, Start, lease monitor and missing/failed-flow detection.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadAdminConsumerService.cs</code><small>Lines / locator: 106–151; 211–262; 272–360</small></div></li><li id="source-17"><span class="source-number">17</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadFlowStartupService.cs">DownloadFlowStartupService.cs</a><p>Blocking reconciliation and deletion of unfinished download workflows.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadFlowStartupService.cs</code><small>Lines / locator: 27–104</small></div></li><li id="source-18"><span class="source-number">18</span><div><a href="../src/Shared/Core/Messaging/DownloadFlowV2Messages.cs">DownloadFlowV2Messages.cs</a><p>Statuses, identities and flow instance names.</p><code>src/Shared/Core/Messaging/DownloadFlowV2Messages.cs</code><small>Lines / locator: 5–156; DownloadFlowInstance</small></div></li><li id="source-19"><span class="source-number">19</span><div><a href="../src/Shared/Modules/DataBridge/DataBridgeModule.cs">DataBridgeModule.cs</a><p>Flow registration, serializer, graceful shutdown and startup ordering.</p><code>src/Shared/Modules/DataBridge/DataBridgeModule.cs</code><small>Lines / locator: 38–55</small></div></li><li id="source-20"><span class="source-number">20</span><div><a href="../src/Shared/Persistence/Persistence/Workflows/README.md">Workflow persistence notes</a><p>Store layout and durable effects/messages; historical paths in this README may be stale.</p><code>src/Shared/Persistence/Persistence/Workflows/README.md</code><small>Lines / locator: Pinned contract and SQLite invariants</small></div></li><li id="source-21"><span class="source-number">21</span><div><a href="../src/Shared/Modules/Api/Features/Downloads/Controllers/DownloadQueueController.cs">DownloadQueueController.cs</a><p>Queue queries, history and SSE endpoints.</p><code>src/Shared/Modules/Api/Features/Downloads/Controllers/DownloadQueueController.cs</code><small>Lines / locator: 51–199</small></div></li><li id="source-22"><span class="source-number">22</span><div><a href="../src/Shared/Modules/DataBridge/Messaging/DownloadProgressPersistenceService.cs">DownloadProgressPersistenceService.cs</a><p>Advisory progress log persistence and throttling.</p><code>src/Shared/Modules/DataBridge/Messaging/DownloadProgressPersistenceService.cs</code><small>Lines / locator: 10–54</small></div></li><li id="source-23"><span class="source-number">23</span><div><a href="../src/Shared/Modules/Scheduler/ChannelTasks/ChannelScanFullScheduler.cs">ChannelScanFullScheduler.cs</a><p>Scheduled full scans publish discovery requests directly.</p><code>src/Shared/Modules/Scheduler/ChannelTasks/ChannelScanFullScheduler.cs</code><small>Lines / locator: 9–24</small></div></li><li id="source-24"><span class="source-number">24</span><div><a href="../src/Shared/Modules/Scheduler/ChannelTasks/ChannelScanRefresher.cs">ChannelScanRefresher.cs</a><p>Scheduled incremental scans publish discovery requests directly.</p><code>src/Shared/Modules/Scheduler/ChannelTasks/ChannelScanRefresher.cs</code><small>Lines / locator: 9–24</small></div></li><li id="source-25"><span class="source-number">25</span><div><a href="../Directory.Packages.props">Directory.Packages.props</a><p>Cleipnir.Flows and PostgreSQL package pin: 4.2.5.</p><code>Directory.Packages.props</code><small>Lines / locator: 12–13</small></div></li><li id="source-26"><span class="source-number">26</span><div><a href="../src/Lite/Infrastructure/Messaging/SqliteDurableTransport.cs">Lite durable transport</a><p>SQLite-backed durable messaging for Lite.</p><code>src/Lite/Infrastructure/Messaging/SqliteDurableTransport.cs</code><small>Lines / locator: SqliteDurableTransport</small></div></li><li id="source-27"><span class="source-number">27</span><div><a href="../src/Full/Infrastructure/Messaging/NatsApplicationTransport.cs">Full messaging transport</a><p>NATS-based transport adapters for Full.</p><code>src/Full/Infrastructure/Messaging/NatsApplicationTransport.cs</code><small>Lines / locator: NatsApplicationTransport</small></div></li></ol></section>
+<footer class="mt-20 pt-6 border-t border-base-300 flex flex-wrap justify-between gap-4 text-xs text-base-content/65"><span>FrostStream · Download V2 / a visual implementation guide</span><span>Self-contained HTML · 14 November 2026</span></footer>
+</main></div><script>const journeys = {"single": [["Submit a URL", "The API validates the source and resolves your download settings. It submits a Direct group and returns an accepted response.", "WebAPI", "DownloadsController"], ["Create one run", "The group publishes one child request. Ingress records the job and creates an immutable Cleipnir run.", "DataBridge", "DownloadGroupV2Flow \u2192 DownloadRequestedIngressService"], ["Identify & check", "A worker fetches metadata. DataBridge checks the source version; this example needs new bytes.", "Worker + DataBridge", "RunMetadataAsync \u2192 CheckSourceVersionAsync"], ["Acquire & store", "yt-dlp downloads to temporary files. The flow checks the content hash, reserves a version and uploads required files and available extras.", "Worker + Cleipnir", "RunMediaAcquireAsync \u2192 ReserveVersionAsync \u2192 RunUploadAsync"], ["Catalogue & clean", "DataBridge reads stored info.json into library metadata and requests search synchronization. Workers clean up temporary files.", "DataBridge + Worker", "RunRichMetadataWriteAsync \u2192 CleanupAllTempFilesAsync"], ["Finalize", "The flow links the source and any playlist membership, then records Completed or CompletedWithWarnings. Optional follow-up jobs are queued separately.", "DataBridge", "RunFinalizeAsync"]], "playlist": [["Submit the collection", "A playlist URL arrives at the playlist endpoint, or is detected by the direct-download endpoint. A Playlist group is published.", "WebAPI", "PlaylistsController / DownloadsController"], ["Collect the pages", "The group asks a worker for flat metadata, stages each page and loops until the full entry list is gathered.", "Group flow + Worker", "RunCollectionAsync \u2192 FetchCollectionPageAsync"], ["Apply ignore rules", "Staged titles are checked against the selected config set\u2019s ignore rules. Ignored entries are recorded without publishing children.", "DataBridge", "IgnoreKeywordMatcher \u2192 FanOutEntryAsync"], ["Fan out items", "Every eligible item becomes an ordinary DownloadRequested message with a stable job ID and the group\u2019s correlation ID.", "Group flow", "RunCollectionAsync"], ["Run each child", "Each child follows the same metadata, duplicate, acquire, upload, metadata-write, cleanup and finalization pipeline as a single download.", "Independent item flows", "DownloadJobV2Flow"], ["Summarize outcomes", "The group\u2019s stored totals change as children settle. A failed item does not terminate its siblings; Start group can retry existing Stopped/Failed children.", "DataBridge", "RefreshGroupAggregateAsync"]], "channel": [["Choose a trigger", "Download channel creates a Channel group for a full scan. A scheduled creator monitor or Scan now sends discovery work directly.", "WebAPI / Scheduler", "DownloadChannel / ChannelScanFullScheduler"], ["Discover a page", "The worker reads a bounded page: up to 5,000 entries for a full scan, or the configured 1\u2013500 recent entries for incremental refresh.", "Worker", "ScanSourceAsync"], ["Remember discoveries", "Candidates go to DataBridge in batches of 100. Identity, metadata changes and the next full-scan index are saved.", "DataBridge", "UpsertDiscoveredMediaBatchAsync"], ["Choose eligible items", "Manual channel downloads queue all eligible page items; normal monitoring queues new or changed ones. Ignored items stay ignored; a group stop suppresses enqueueing.", "DataBridge", "CreatorDiscoveryRepository"], ["Start item flows", "Eligible candidates become independent DownloadRequested messages. Each child performs its own source and content duplicate checks and full download pipeline.", "DataBridge + Worker", "PublishDownloadRequestedAsync \u2192 DownloadJobV2Flow"], ["Continue over time", "A manual group tracks child outcomes. Later full scans continue the saved page cursor; later refresh scans check recent items for new changes.", "Scheduler + DataBridge", "NextFullScanStartIndex / ChannelScanRefresher"]]};
+let journey='single', step=0;
+const byId=id=>document.getElementById(id);
+function renderWalk(){
+ const entries=journeys[journey], current=entries[step];
+ byId('walk-steps').replaceChildren(...entries.map((item,i)=>{const li=document.createElement('li'),num=document.createElement('span');num.textContent=String(i+1).padStart(2,'0');li.append(num,document.createTextNode(item[0]));if(i===step)li.setAttribute('aria-current','step');return li}));
+ byId('walk-count').textContent=`Step ${step+1} of ${entries.length}`;byId('walk-title').textContent=current[0];byId('walk-copy').textContent=current[1];byId('walk-owner').textContent=current[2];byId('walk-code').textContent=current[3];byId('walk-back').disabled=step===0;byId('walk-next').textContent=step===entries.length-1?'Start again ↺':'Next →';
+}
+document.querySelectorAll('[data-journey]').forEach(button=>button.addEventListener('click',()=>{journey=button.dataset.journey;step=0;document.querySelectorAll('[data-journey]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));renderWalk()}));
+byId('walk-back').addEventListener('click',()=>{step=Math.max(0,step-1);renderWalk()});
+byId('walk-next').addEventListener('click',()=>{step=(step+1)%journeys[journey].length;renderWalk()});renderWalk();
+const details=[...document.querySelectorAll('details.technical')];
+const expand=byId('expand-tech');
+expand.addEventListener('click',()=>{const open=expand.getAttribute('aria-pressed')!=='true';details.forEach(d=>d.open=open);expand.setAttribute('aria-pressed',String(open));expand.textContent=open?'Close technical details':'Open technical details'});
+let printState=[];
+window.addEventListener('beforeprint',()=>{printState=details.map(d=>d.open);details.forEach(d=>d.open=true)});
+window.addEventListener('afterprint',()=>{details.forEach((d,i)=>d.open=printState[i]??false)});
+byId('print-guide').addEventListener('click',()=>window.print());
+const links=[...document.querySelectorAll('.nav-link')];
+if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){links.forEach(link=>{if(link.getAttribute('href')==='#'+entry.target.id)link.setAttribute('aria-current','true');else link.removeAttribute('aria-current')})}}},{rootMargin:'-8% 0px -72% 0px',threshold:0});document.querySelectorAll('.doc-section').forEach(section=>observer.observe(section))}
+</script></body></html>
