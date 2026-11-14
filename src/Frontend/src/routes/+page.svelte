@@ -155,7 +155,7 @@
             aria-label={`Resume ${item.title}`}
           >
             <span
-              class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-white/15"
+              class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-base-content/30"
             >
               {initialsFor(item.creator)}
             </span>
@@ -171,12 +171,12 @@
             {/if}
             {#if formatDuration(item.durationSeconds)}
               <span
-                class="absolute bottom-3 right-3 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                class="absolute bottom-3 right-3 rounded bg-neutral px-1.5 py-0.5 text-[10px] font-semibold text-neutral-content"
               >
                 {formatDuration(item.durationSeconds)}
               </span>
             {/if}
-            <span class="absolute inset-x-0 bottom-0 h-1 bg-black/35">
+            <span class="absolute inset-x-0 bottom-0 h-1 bg-base-300">
               <span class="block h-full bg-primary" style={`width: ${item.progressPercent}%`}></span>
             </span>
             <span

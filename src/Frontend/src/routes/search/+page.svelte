@@ -289,7 +289,7 @@
             class={`relative block aspect-video w-full overflow-hidden rounded-box bg-gradient-to-br ${accentFor(hit.media.mediaGuid)} text-left shadow-lg shadow-black/20 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-black/30`}
             aria-label={`Play ${hit.media.title}`}
           >
-            <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-white/15">
+            <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-base-content/30">
               {initialsFor(hit.media.account.accountName)}
             </span>
             {#if thumbnailUrl(hit)}
@@ -303,13 +303,13 @@
               />
             {/if}
             <span
-              class="absolute left-3 top-3 rounded-field bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
+              class="absolute left-3 top-3 rounded-field bg-neutral px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-content"
             >
               {hit.media.account.platform}
             </span>
             {#if formatDuration(hit.media.durationSeconds)}
               <span
-                class="absolute bottom-3 right-3 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                class="absolute bottom-3 right-3 rounded bg-neutral px-1.5 py-0.5 text-[10px] font-semibold text-neutral-content"
               >
                 {formatDuration(hit.media.durationSeconds)}
               </span>

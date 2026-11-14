@@ -332,7 +332,7 @@
                   <span
                     class={`relative grid h-9 w-16 shrink-0 place-items-center overflow-hidden rounded-field bg-gradient-to-br ${accentFor(hit.media.mediaGuid)}`}
                   >
-                    <span class="text-[10px] font-black text-white/30">
+                    <span class="text-[10px] font-black text-base-content/30">
                       {initialsFor(hit.media.account.accountName)}
                     </span>
                     {#if suggestionThumbnail(hit)}

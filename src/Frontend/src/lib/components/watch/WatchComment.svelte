@@ -109,7 +109,7 @@
           {/if}
 
           {#if comment.isFavorited}
-            <span class="relative ml-1 grid h-7 w-7 place-items-center rounded-full ring-1 ring-rose-500/30">
+            <span class="relative ml-1 grid h-7 w-7 place-items-center rounded-full ring-1 ring-error/30">
               <span
                 class={`absolute inset-0 rounded-full bg-gradient-to-br ${accentFor(displayName)} overflow-hidden`}
                 aria-hidden="true"
@@ -128,7 +128,7 @@
                   />
                 {/if}
               </span>
-              <Heart class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-base-200 p-0.5 text-rose-400 shadow" />
+              <Heart class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-base-200 p-0.5 text-error shadow" />
             </span>
           {/if}
         </div>

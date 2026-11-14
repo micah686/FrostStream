@@ -476,7 +476,7 @@
               aria-label={`Play ${card.title}`}
             >
               <span
-                class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-white/15"
+                class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl font-black text-base-content/30"
               >
                 {initialsFor(card.account.accountName)}
               </span>
@@ -491,13 +491,13 @@
                 />
               {/if}
               <span
-                class="absolute left-3 top-3 rounded-field bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/80"
+                class="absolute left-3 top-3 rounded-field bg-neutral px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-content"
               >
                 {card.account.platform}
               </span>
               {#if formatDuration(card.durationSeconds)}
                 <span
-                  class="absolute bottom-3 right-3 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                  class="absolute bottom-3 right-3 rounded bg-neutral px-1.5 py-0.5 text-[10px] font-semibold text-neutral-content"
                 >
                   {formatDuration(card.durationSeconds)}
                 </span>
@@ -600,7 +600,7 @@
                 aria-label={card.firstGuid ? `Play playlist ${card.playlist.name}` : `Edit playlist ${card.playlist.name}`}
               >
                 <ListMusic
-                  class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
+                  class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-base-content/30"
                 />
                 {#if card.firstGuid}
                   <img
@@ -613,7 +613,7 @@
                   />
                 {/if}
                 <span
-                  class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
+                  class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-neutral px-3 py-1.5 text-[11px] font-semibold text-neutral-content backdrop-blur-sm"
                 >
                   <span class="flex items-center gap-1.5">
                     <ListMusic class="h-3.5 w-3.5" />
@@ -685,7 +685,7 @@
                   aria-label={`Play playlist ${card.playlist.title ?? 'Untitled provider playlist'}`}
                 >
                   <ListMusic
-                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/15"
+                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-base-content/30"
                   />
                   <img
                     src={`/api/media/watch/${card.playlist.firstMediaGuid}/thumbnail`}
@@ -696,7 +696,7 @@
                     onerror={hideBrokenImage}
                   />
                   <span
-                    class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm"
+                    class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-neutral px-3 py-1.5 text-[11px] font-semibold text-neutral-content backdrop-blur-sm"
                   >
                     <span class="flex items-center gap-1.5">
                       <ListMusic class="h-3.5 w-3.5" />
@@ -715,10 +715,10 @@
                   class="relative block aspect-video w-full overflow-hidden rounded-box bg-base-200/60 opacity-70"
                 >
                   <ListMusic
-                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-white/10"
+                    class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-base-content/30"
                   />
                   <span
-                    class="absolute bottom-0 left-0 right-0 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white/60"
+                    class="absolute bottom-0 left-0 right-0 bg-neutral px-3 py-1.5 text-[11px] font-semibold text-neutral-content"
                   >
                     Nothing downloaded yet
                   </span>

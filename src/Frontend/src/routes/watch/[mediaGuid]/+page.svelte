@@ -1764,7 +1764,7 @@
                 <span
                   class={`relative block aspect-video w-40 shrink-0 overflow-hidden rounded-box bg-gradient-to-br ${accentFor(card.mediaGuid)} shadow-lg shadow-black/20`}
                 >
-              <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-black text-white/15">
+              <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-black text-base-content/30">
                 {initialsFor(card.account.accountName)}
               </span>
                   {#if thumbnailUrl(card)}
@@ -1778,7 +1778,7 @@
                     />
                   {/if}
                   {#if formatDuration(card.durationSeconds)}
-                <span class="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                <span class="absolute bottom-1.5 right-1.5 rounded-field bg-neutral px-1.5 py-0.5 text-[10px] font-semibold text-neutral-content">
                   {formatDuration(card.durationSeconds)}
                 </span>
                   {/if}

@@ -195,7 +195,7 @@
                   onerror={hideBrokenImage}
                 />
                 {#if formatDuration(entry.durationSeconds)}
-                  <span class="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-semibold text-white">
+                  <span class="absolute bottom-1 right-1 rounded bg-neutral px-1 py-0.5 text-[9px] font-semibold text-neutral-content">
                     {formatDuration(entry.durationSeconds)}
                   </span>
                 {/if}
