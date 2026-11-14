@@ -1,5 +1,11 @@
 <script lang="ts">
   import {
+    Film,
+    Folder,
+    FileVideo,
+    ListVideo,
+    Tv,
+    ListChecks,
     ChevronDown,
     CircleAlert,
     ExternalLink,
@@ -15,6 +21,7 @@
     type DownloadQueueJob,
     type ProgressFrame
   } from '#lib/api/downloadQueue.js';
+  import JobStages from './JobStages.svelte';
   import type { QueueRow } from '#lib/stores/downloadQueue.js';
   import {
     canStart,
@@ -32,29 +39,26 @@
 
   let {
     row,
-    now,
     optionPresetsByKey,
     busyAction,
     onstop,
     onstart,
     onclearprovider,
-    ongroupstop,
-    ongroupstart,
-    onpriority
+    onpriority,
+    oncollection
   }: {
     row: QueueRow;
-    now: number;
     optionPresetsByKey: Map<string, string>;
     busyAction: string | undefined;
     onstop: (row: QueueRow) => void;
     onstart: (row: QueueRow) => void;
     onclearprovider: (row: QueueRow) => void;
-    ongroupstop: (row: QueueRow) => void;
-    ongroupstart: (row: QueueRow) => void;
     onpriority: (row: QueueRow) => void;
+    oncollection?: (id: string) => void;
   } = $props();
 
   let expanded = $state(false);
+  let detailTab = $state('Stages');
   let history = $state<DownloadQueueHistoryEntry[] | 'loading' | 'error' | undefined>(undefined);
   let mediaGuid = $state<string | null | undefined>(undefined);
   let liveMessages = $state<{ text: string; at: number }[]>([]);
@@ -201,29 +205,6 @@
     return !isStopped(r.job.status) && (r.progress !== undefined || isDone(r.job.status));
   }
 
-  function formatElapsed(r: QueueRow): string {
-    if (!hasCurrentRunMetrics(r)) {
-      return '-';
-    }
-    const j = r.job;
-    const started = Date.parse(j.createdAt);
-    const ended = terminalEndedAt(j);
-    if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) {
-      return '-';
-    }
-    return formatDurationMs(ended - started);
-  }
-
-  function terminalEndedAt(j: DownloadQueueJob): number {
-    if (j.completedAt) {
-      return Date.parse(j.completedAt);
-    }
-    if (isTerminal(j.status)) {
-      return Date.parse(j.updatedAt);
-    }
-    return now;
-  }
-
   function formatEta(seconds: number | null | undefined): string {
     return seconds === null || seconds === undefined ? '-' : formatDurationMs(seconds * 1000);
   }
@@ -262,33 +243,12 @@
 
   function statusTone(status: string): string {
     if (isDone(status)) {
-      return 'badge-success text-success-content';
+      return 'badge-soft badge-success';
     }
     if (isFailed(status) || isStopped(status)) {
-      return 'badge-error text-error-content';
+      return 'badge-soft badge-error';
     }
-    return 'badge-primary text-primary-content';
-  }
-
-  function rowTone(status: string): string {
-    if (isFailed(status)) {
-      return 'border-error/45 bg-error/10';
-    }
-    if (isActive(status)) {
-      return 'border-primary/60 bg-primary/10';
-    }
-    return 'border-base-300/90 bg-base-200/45';
-  }
-
-  function originBadge(sourceKind: string): { label: string; tone: string } | null {
-    switch (sourceKind.toLowerCase()) {
-      case 'playlist':
-        return { label: 'PLAYLIST', tone: 'badge-accent text-accent-content' };
-      case 'channel':
-        return { label: 'CHANNEL', tone: 'badge-accent text-accent-content' };
-      default:
-        return null;
-    }
+    return isActive(status) ? 'badge-soft badge-primary' : 'badge-ghost';
   }
 
   function isCollectionJob(j: DownloadQueueJob): boolean {
@@ -361,78 +321,42 @@
   }
 </script>
 
-<article class={['card border p-4 transition', rowTone(job.status)]}>
-  <div
-    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center"
-    role="button"
-    tabindex="0"
-    aria-expanded={expanded}
-    onclick={toggleExpanded}
-    onkeydown={(event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        void toggleExpanded();
-      }
-    }}
-  >
-    <div class="flex min-w-0 items-start gap-3">
-      <div class="min-w-0">
-        <div class="flex min-w-0 items-center gap-2">
-          <ChevronDown class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']} />
-          <h2 class="min-w-0 truncate text-sm font-semibold text-base-content">
-            {displayTitle(job.sourceUrl)}
-          </h2>
-          <span class={['badge badge-sm shrink-0 text-[10px] font-bold', statusTone(job.status)]}>
-            {displayStatus(row)}
-          </span>
-          {#if originBadge(job.sourceKind)}
-            {@const origin = originBadge(job.sourceKind)!}
-            <span class={['badge badge-sm shrink-0 text-[10px] font-bold', origin.tone]}>
-              {origin.label}
-            </span>
-          {/if}
+<article class="card overflow-hidden rounded-lg border border-base-300 bg-base-100">
+  <div class="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 p-3.5 max-[470px]:grid-cols-1">
+    <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50 max-[470px]:hidden"><Film class="h-4 w-4" /></div>
+    <div class="min-w-0">
+      <div class="flex items-start justify-between gap-3">
+        <h3 class="break-words text-sm font-semibold text-base-content">{displayTitle(job.sourceUrl)}</h3>
+        <span class="badge badge-sm badge-ghost shrink-0 gap-1 rounded text-[11px] text-base-content/60">
+          {#if job.sourceKind.toLowerCase() === 'channel'}<Tv class="h-3 w-3" />Channel
+          {:else if job.sourceKind.toLowerCase() === 'playlist'}<ListVideo class="h-3 w-3" />Playlist
+          {:else}<FileVideo class="h-3 w-3" />Single{/if}
+        </span>
+      </div>
+      <div class="mt-1 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/55">
+        <span>{provider}</span>
+        {#if isCollectionJob(job)}
+          <button class="link inline-flex items-center gap-1 text-primary" onclick={() => oncollection?.(job.correlationId)}><Folder class="h-3 w-3" />Collection {shortCollectionId(job.correlationId)}</button>
+        {:else}<span>Direct</span>{/if}
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
+        <span class={['badge badge-sm rounded text-[11px]', statusTone(job.status)]}>{displayStatus(row)}</span>
+        <span>{displayStage(row)}</span>
+      </div>
+      {#if job.failureMessage}<p class="mt-2 break-words text-xs text-error">{job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}</p>{/if}
+      {#if isActive(job.status) && hasActiveDownloadProgress(row.progress)}
+        <progress class="progress progress-primary mt-3 block h-1 w-full" value={percent} max="100" aria-label="Current transfer"></progress>
+        <div class="mt-1 flex flex-wrap justify-between gap-2 text-xs tabular-nums text-base-content/55">
+          <span>{row.progress?.phase || 'Transfer'}: {formatPercent(row)} · {formatOptionalBytes(downloadedBytesFor(row))} / {formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}</span>
+          <span>{formatSpeed(row.progress?.speed)} · {formatEta(row.progress?.etaSeconds)} remaining</span>
         </div>
-        <p class="mt-1 truncate text-xs text-base-content/50">
-          {provider} · {job.storageKey ?? 'default'} · {formatOptionalBytes(row.progress?.totalBytes ?? job.fileSizeBytes)}
-          {#if isCollectionJob(job)}
-            · group <span class="font-mono">{shortCollectionId(job.correlationId)}</span>
-          {/if}
-        </p>
-        {#if isActive(job.status) || isQueued(job.status) || isFailed(job.status) || isStopped(job.status)}
-          <p class="mt-1 truncate text-[11px] text-base-content/50">
-            {displayStage(row)}
-            {#if job.artifactKey}
-              · <span class="font-mono">{job.artifactKey}</span>
-            {/if}
-          </p>
-        {/if}
-        {#if job.failureMessage}
-          <p class="mt-2 line-clamp-1 text-xs text-error">
-            {job.failureCode ? `${job.failureCode}: ` : ''}{job.failureMessage}
-          </p>
-        {/if}
-      </div>
-    </div>
-
-    <div class="flex items-center justify-center">
-      <div
-        class="radial-progress text-primary"
-        style={`--value:${percent}; --size:3.5rem;`}
-        role="progressbar"
-        aria-valuenow={Math.round(percent)}
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
-        <span class="text-[11px] font-semibold text-base-content">{formatPercent(row)}</span>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-end gap-1.5">
+      {/if}
+      <div class="mt-3 flex flex-wrap items-center gap-2">
       {#if isDone(job.status) && mediaGuid}
         <a
           href={`/watch/${mediaGuid}`}
           onclick={stop}
-          class="btn btn-sm btn-neutral text-xs"
+          class="btn btn-sm btn-accent text-xs"
           title="Watch"
           aria-label="Watch"
         >
@@ -462,7 +386,7 @@
       {#if canStart(job.status)}
         <button
           type="button"
-          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
+          class="btn btn-sm btn-accent text-xs disabled:opacity-40"
           title="Start a new run"
           aria-label="Start a new run"
           disabled={Boolean(busyAction)}
@@ -476,7 +400,7 @@
           {:else}
             <Play class="h-4 w-4" />
           {/if}
-          New run
+          Retry
         </button>
       {/if}
       {#if job.failureCode === 'provider_circuit_open' || job.failureKind?.toLowerCase() === 'providerblocked'}
@@ -502,7 +426,7 @@
       {#if canStop(job.status)}
         <button
           type="button"
-          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
+          class="btn btn-sm btn-accent text-xs disabled:opacity-40"
           title="Stop job"
           aria-label="Stop job"
           disabled={Boolean(busyAction)}
@@ -516,47 +440,7 @@
           {:else}
             <Square class="h-4 w-4" />
           {/if}
-          Stop
-        </button>
-      {/if}
-      {#if isCollectionJob(job) && canStart(job.status)}
-        <button
-          type="button"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-field border-[length:var(--border)] border-base-content/20 bg-base-200/70 px-2 text-[11px] font-semibold text-base-content/90 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
-          title="Start every failed or stopped job in this group"
-          aria-label="Start group"
-          disabled={Boolean(busyAction)}
-          onclick={(event) => {
-            stop(event);
-            ongroupstart(row);
-          }}
-        >
-          {#if busyAction === 'group-start'}
-            <span class="loading loading-spinner loading-xs"></span>
-          {:else}
-            <Repeat class="h-3.5 w-3.5" />
-          {/if}
-          Group
-        </button>
-      {/if}
-      {#if isCollectionJob(job) && canStop(job.status)}
-        <button
-          type="button"
-          class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
-          title="Stop every queued or running job in this group"
-          aria-label="Stop group"
-          disabled={Boolean(busyAction)}
-          onclick={(event) => {
-            stop(event);
-            ongroupstop(row);
-          }}
-        >
-          {#if busyAction === 'group-stop'}
-            <span class="loading loading-spinner loading-xs"></span>
-          {:else}
-            <Square class="h-3.5 w-3.5" />
-          {/if}
-          Stop group
+          Cancel
         </button>
       {/if}
       <a
@@ -564,18 +448,32 @@
         target="_blank"
         rel="noreferrer"
         onclick={stop}
-        class="btn btn-sm btn-neutral text-xs"
+        class="btn btn-sm btn-accent text-xs"
         title="View source"
         aria-label="View source"
       >
         <ExternalLink class="h-4 w-4" />
         View source
       </a>
+      </div>
+      <button class="mt-3 flex max-w-full items-center gap-1.5 text-left text-xs text-base-content/60 hover:text-base-content" onclick={toggleExpanded} aria-expanded={expanded} aria-controls={`job-details-${job.jobId}`}>
+        <ListChecks class="h-3.5 w-3.5 shrink-0" />
+        <span>{isQueued(job.status) ? 'Workflow not started' : isDone(job.status) ? 'Workflow finished' : `Workflow · ${displayStage(row)}`}</span>
+        <ChevronDown class={['h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none', expanded && 'rotate-180']} />
+      </button>
     </div>
   </div>
 
   {#if expanded}
-    <div class="mt-3 border-t border-base-300/70 pt-3">
+    <div id={`job-details-${job.jobId}`} class="border-t border-base-300 bg-base-200/40 p-3.5 sm:pl-15">
+      <div class="tabs tabs-border mb-3" role="group" aria-label="Job detail view">
+        {#each ['Stages', 'Logs', 'Runs & IDs'] as tab}
+          <button class={['tab h-8 px-0 mr-5 text-xs', detailTab === tab && 'tab-active']} aria-pressed={detailTab === tab} onclick={() => detailTab = tab}>{tab}</button>
+        {/each}
+      </div>
+      {#if detailTab === 'Stages'}
+        <JobStages {job} {history} />
+      {:else if detailTab === 'Runs & IDs'}
       <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="shrink-0 text-base-content/40">Job ID</span>
@@ -587,10 +485,6 @@
             <span class="break-all font-mono text-base-content/60">{job.correlationId}</span>
           </span>
         {/if}
-        <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-base-content/40">Option set</span>
-          <span class="text-base-content/60">{optionSetLabel(history)}</span>
-        </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Run</span>
           <span class="text-base-content/60">#{job.runNumber}</span>
@@ -623,16 +517,8 @@
 
       <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
         <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-base-content/40">Speed</span>
-          <span class="text-base-content/60">{hasCurrentRunMetrics(row) ? formatSpeed(row.progress?.speed) : '-'}</span>
-        </span>
-        <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-base-content/40">ETA</span>
-          <span class="text-base-content/60">{hasCurrentRunMetrics(row) ? formatEta(row.progress?.etaSeconds) : '-'}</span>
-        </span>
-        <span class="inline-flex items-center gap-1">
-          <span class="shrink-0 text-base-content/40">Elapsed</span>
-          <span class="text-base-content/60">{formatElapsed(row)}</span>
+          <span class="shrink-0 text-base-content/40">Option set</span>
+          <span class="text-base-content/60">{optionSetLabel(history)}</span>
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="shrink-0 text-base-content/40">Downloaded</span>
@@ -644,6 +530,7 @@
         </span>
       </div>
 
+      {:else}
       <div
         bind:this={logEl}
         onscroll={handleLogScroll}
@@ -675,6 +562,7 @@
           <p class="whitespace-pre-wrap break-words text-base-content">{entry.text}</p>
         {/each}
       </div>
+      {/if}
     </div>
   {/if}
 </article>

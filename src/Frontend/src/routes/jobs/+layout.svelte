@@ -37,19 +37,19 @@
     <p class="mt-2 text-sm text-base-content/60">Downloads, encoding, and background work</p>
   </div>
 
-  <div class="mt-6 grid gap-6 xl:grid-cols-[14rem_minmax(0,1fr)]">
-    <aside class="xl:pt-1" aria-label="Jobs sections">
-      <nav class="menu flex gap-2 overflow-x-auto p-0 pb-1 [--menu-active-bg:var(--color-primary)] [--menu-active-fg:var(--color-primary-content)] xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+  <div class="mt-5 space-y-5">
+    <aside class="border-b border-base-300" aria-label="Jobs sections">
+      <nav class="tabs tabs-border flex-nowrap overflow-x-auto" aria-label="Job categories">
         {#each sections as section}
           {@const { label, icon: Icon, href } = section}
           {@const active = isActive(section)}
           <a
             {href}
             class={[
-              'flex h-10 shrink-0 items-center gap-3 rounded-field px-4 text-sm font-medium transition xl:w-full',
+              'tab flex h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium',
               active
-                ? 'menu-active bg-primary text-primary-content'
-                : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
+                ? 'tab-active text-primary'
+                : 'text-base-content/60 hover:text-base-content'
             ]}
             aria-current={active ? 'page' : undefined}
           >
