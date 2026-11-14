@@ -326,7 +326,7 @@
     <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50 max-[470px]:hidden"><Film class="h-4 w-4" /></div>
     <div class="min-w-0">
       <div class="flex items-start justify-between gap-3">
-        <h3 class="break-words text-sm font-semibold text-base-content">{displayTitle(job.sourceUrl)}</h3>
+        <h3 class="break-words text-sm font-semibold text-base-content">{job.title?.trim() || displayTitle(job.sourceUrl)}</h3>
         <span class="badge badge-sm badge-ghost shrink-0 gap-1 rounded text-[11px] text-base-content/60">
           {#if job.sourceKind.toLowerCase() === 'channel'}<Tv class="h-3 w-3" />Channel
           {:else if job.sourceKind.toLowerCase() === 'playlist'}<ListVideo class="h-3 w-3" />Playlist

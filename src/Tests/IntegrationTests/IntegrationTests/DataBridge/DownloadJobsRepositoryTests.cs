@@ -314,6 +314,44 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
+    public async Task Queue_Resolves_Metadata_And_Collection_Titles()
+    {
+        await using var db = Fixture.CreateDb();
+        var job = Job(Guid.NewGuid(), DownloadJobState.Completed);
+        var playlistId = Guid.NewGuid();
+        db.DownloadJobs.Add(job);
+        db.Playlists.Add(new PlaylistEntity
+        {
+            PlaylistId = playlistId, CorrelationId = job.CorrelationId,
+            SourceUrl = "https://example.test/playlist"
+        });
+        db.PlaylistSourceMetadata.Add(new PlaylistSourceMetadataEntity
+        {
+            PlaylistId = playlistId, Title = "Creator's uploads"
+        });
+        db.PlaylistItems.Add(new PlaylistItemEntity
+        {
+            PlaylistId = playlistId, JobId = job.JobId, PlaylistIndex = 1,
+            EntryUrl = job.SourceUrl, EntryTitle = "Entry title"
+        });
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+        (await repository.GetQueueJobAsync(job.JobId))!.Title.ShouldBe("Entry title");
+        var metadata = new MetadataFetched
+        {
+            JobId = job.JobId, CorrelationId = job.CorrelationId,
+            MessageId = Guid.NewGuid(), OperationKey = "metadata/title",
+            OccurredAt = Fixture.Now, Attempt = 1, Title = "Resolved video title"
+        };
+        await repository.RecordHistoryAsync(job.JobId, metadata.MessageId, metadata.OperationKey,
+            nameof(MetadataFetched), System.Text.Json.JsonSerializer.Serialize(metadata));
+        var item = (await repository.QueryQueueAsync(new DownloadQueueListRequest())).Items.Single();
+        item.Title.ShouldBe("Resolved video title");
+        item.CollectionTitle.ShouldBe("Creator's uploads");
+        (await repository.GetQueueJobAsync(job.JobId))!.Title.ShouldBe(item.Title);
+    }
+
+    [Test]
     public async Task GetQueueJobAsync_Returns_Snapshot_Or_Null()
     {
         var jobId = Guid.NewGuid();

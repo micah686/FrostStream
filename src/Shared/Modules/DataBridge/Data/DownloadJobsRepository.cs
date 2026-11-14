@@ -627,6 +627,8 @@ public sealed class DownloadJobsRepository(
             .Select(QueueDtoProjection)
             .ToListAsync(ct);
 
+        rows = await ResolveTitlesAsync(rows, ct);
+
         var nextOffset = offset + rows.Count;
         var nextCursor = nextOffset < totalCount ? EncodeCursor(nextOffset) : null;
 
@@ -635,11 +637,12 @@ public sealed class DownloadJobsRepository(
 
     public async Task<DownloadQueueJobDto?> GetQueueJobAsync(Guid jobId, CancellationToken ct = default)
     {
-        return await db.DownloadJobs
+        var job = await db.DownloadJobs
             .AsNoTracking()
             .Where(x => x.JobId == jobId)
             .Select(QueueDtoProjection)
             .FirstOrDefaultAsync(ct);
+        return job is null ? null : (await ResolveTitlesAsync([job], ct))[0];
     }
 
     /// <summary>
@@ -710,6 +713,49 @@ public sealed class DownloadJobsRepository(
 
     // Shared projection (as an expression tree so EF can translate it) — list and detail
     // return identical snapshots.
+    // Resolve persisted metadata in batches, including jobs from before titles were exposed
+    // by the queue API. Run retries retain the same job and collection identity.
+    private async Task<List<DownloadQueueJobDto>> ResolveTitlesAsync(
+        List<DownloadQueueJobDto> jobs, CancellationToken ct)
+    {
+        var ids = jobs.Select(x => x.JobId).ToArray();
+        var correlations = jobs.Select(x => x.CorrelationId).ToArray();
+        var metadata = await db.DownloadJobHistory.AsNoTracking()
+            .Where(x => ids.Contains(x.JobId) && x.EventName == nameof(MetadataFetched))
+            .OrderByDescending(x => x.Id)
+            .Select(x => new { x.JobId, x.PayloadJson }).ToListAsync(ct);
+        var titles = new Dictionary<Guid, string>();
+        foreach (var row in metadata)
+        {
+            if (titles.ContainsKey(row.JobId) || row.PayloadJson is null)
+                continue;
+            try
+            {
+                var title = JsonSerializer.Deserialize<MetadataFetched>(row.PayloadJson)?.Title;
+                if (!string.IsNullOrWhiteSpace(title))
+                    titles[row.JobId] = title.Trim();
+            }
+            catch (JsonException) { /* Older malformed history must not break the queue. */ }
+        }
+        var entries = await db.PlaylistItems.AsNoTracking()
+            .Where(x => ids.Contains(x.JobId))
+            .Select(x => new { x.JobId, x.EntryTitle }).ToListAsync(ct);
+        var collections = await (
+            from playlist in db.Playlists.AsNoTracking()
+            join source in db.PlaylistSourceMetadata.AsNoTracking()
+                on playlist.PlaylistId equals source.PlaylistId
+            where correlations.Contains(playlist.CorrelationId)
+            orderby playlist.UpdatedAt descending
+            select new { playlist.CorrelationId, source.Title }).ToListAsync(ct);
+        return jobs.Select(job => job with
+        {
+            Title = titles.GetValueOrDefault(job.JobId)
+                ?? entries.FirstOrDefault(x => x.JobId == job.JobId && !string.IsNullOrWhiteSpace(x.EntryTitle))?.EntryTitle,
+            CollectionTitle = collections.FirstOrDefault(x => x.CorrelationId == job.CorrelationId
+                && !string.IsNullOrWhiteSpace(x.Title))?.Title
+        }).ToList();
+    }
+
     private static readonly Expression<Func<DownloadJobEntity, DownloadQueueJobDto>> QueueDtoProjection = x => new DownloadQueueJobDto
     {
         JobId = x.JobId,

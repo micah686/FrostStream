@@ -105,7 +105,7 @@
       groups.set(row.job.correlationId, group);
     }
     return [...groups].map(([id, rows]) => ({ id, rows, kind: rows[0].job.sourceKind,
-      name: `${rows[0].job.sourceKind} collection · ${id.split('-')[0]}`,
+      name: `Collection_${id}_${rows.find(row => row.job.collectionTitle?.trim())?.job.collectionTitle?.trim() || rows[0].job.sourceKind}`,
       done: rows.filter(row => isDone(row.job.status)).length,
       active: rows.filter(row => isActive(row.job.status)).length,
       queued: rows.filter(row => isQueued(row.job.status)).length,
@@ -116,7 +116,7 @@
   const visibleCollections = $derived(collections.filter(group => `${group.name} ${group.rows.map(row => row.job.sourceUrl).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
   const collectionMatches = $derived(scopedRows.filter(row => {
     const matches = { working: (status: string) => isActive(status) || isQueued(status), active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped, all: () => true }[activeFilter];
-    return matches(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
+    return matches(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.title ?? ''} ${row.job.collectionTitle ?? ''} ${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
   }));
   const visibleRows = $derived(selectedCollection ? collectionMatches.slice((page - 1) * pageSize, page * pageSize) : queueState.rows.filter(row => activeFilter === 'all' || (activeFilter === 'working' ? isActive(row.job.status) || isQueued(row.job.status) : ({ active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped }[activeFilter])(row.job.status))));
   const matchingCount = $derived(selectedCollection ? collectionMatches.length : activeFilter === 'all' ? queueState.totalCount : queueState.rows.length);

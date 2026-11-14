@@ -55,6 +55,8 @@ export interface DownloadQueueJob {
   warningCount: number;
   /** @deprecated V2 clients use status/stage. */
   state: DownloadJobState;
+  title?: string | null;
+  collectionTitle?: string | null;
   sourceUrl: string;
   requestedBy: string | null;
   storageKey: string | null;

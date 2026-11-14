@@ -129,10 +129,11 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
             updatedAt: frame.occurredAt
           }
         });
+        // Resolve titles after metadata completes; the compact SSE frame omits titles.
         // The compact SSE frame intentionally omits failure text, completion timestamps, and
         // storage fields. Refresh terminal transitions so the row immediately shows the complete
         // authoritative result (including provider-circuit details and warnings).
-        if (['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
+        if ((row.job.stage === 'Metadata' && frame.stage !== 'Metadata') || ['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
           normalizeStatus(frame.status)
         )) {
           void refresh();

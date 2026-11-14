@@ -59,7 +59,8 @@ public sealed class PlaylistCommandsConsumerService(
             var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: potOptionsApplier.Apply(playlistOptions));
             if (topResult.Success && topResult.Data is { } container)
             {
-                title = container.PlaylistTitle ?? container.Title;
+                title = new[] { container.PlaylistTitle, container.Title, container.Channel, container.Uploader }
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
                 providerPlaylistId = container.PlaylistId ?? container.Id;
 
                 if (container.Entries is { Count: > 0 } childEntries)

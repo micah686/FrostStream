@@ -152,6 +152,8 @@ public sealed record DownloadQueueJobDto
     public int MaxAttempts { get; init; } = 3;
     public string? ArtifactKey { get; init; }
     public int WarningCount { get; init; }
+    public string? Title { get; init; }
+    public string? CollectionTitle { get; init; }
     public required string SourceUrl { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }
