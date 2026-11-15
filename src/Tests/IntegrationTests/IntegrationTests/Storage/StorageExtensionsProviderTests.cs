@@ -262,6 +262,11 @@ internal sealed class StorageProtocolContainerFixture : IAsyncDisposable
             await _nfs!.DisposeAsync();
             return false;
         }
+        catch (TimeoutException)
+        {
+            await _nfs!.DisposeAsync();
+            return false;
+        }
         catch (Exception ex) when (ex.ToString().Contains("kernel module nfs is missing", StringComparison.OrdinalIgnoreCase)
                                    || ex.ToString().Contains("nfs module is not loaded", StringComparison.OrdinalIgnoreCase))
         {
