@@ -5,10 +5,10 @@
     ChevronLeft,
     ChevronRight,
     CircleAlert,
+    Music2,
     Play,
     RefreshCw,
-    RotateCw,
-    Square,
+    Search,
     Video
   } from '@lucide/svelte';
   import { createEncodingQueueStore, type EncodingQueueState } from '#lib/stores/encodingQueue.js';
@@ -144,11 +144,11 @@
   function statusBadgeClass(status: RenditionStatus): string {
     switch (status) {
       case 'Ready':
-        return 'badge-success text-success-content';
+        return 'badge-soft badge-success';
       case 'Failed':
-        return 'badge-error text-error-content';
+        return 'badge-soft badge-error';
       default:
-        return 'badge-primary text-primary-content';
+        return status === 'Processing' ? 'badge-soft badge-primary' : 'badge-ghost';
     }
   }
 
@@ -171,67 +171,44 @@
   <title>Encoding · Jobs · FrostStream</title>
 </svelte:head>
 
-<div aria-labelledby="encoding-title">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 id="encoding-title" class="text-lg font-semibold tracking-tight text-base-content">Encoding</h2>
-      <p class="mt-1 text-sm text-base-content/50">
-        Stream (HLS) and audio (Opus) rendition jobs · page {page} · {queueState.rows.length} shown · {queueState.totalCount} matching
-      </p>
-    </div>
+<section class="overflow-hidden rounded-lg border border-base-300 bg-base-200/40" aria-labelledby="encoding-title">
+  <header class="flex flex-wrap items-center gap-3 px-5 pt-5">
+    <h2 id="encoding-title" class="text-xl font-semibold tracking-tight">Encoding</h2>
+    <span class={['inline-flex items-center gap-1.5 text-xs', queueState.connected ? 'text-success' : 'text-base-content/50']} role="status">
+      <span class={['h-1.5 w-1.5 rounded-full', queueState.connected ? 'bg-success' : 'bg-base-content/30']}></span>
+      {queueState.connected ? 'Live' : 'Reconnecting'}
+    </span>
+    <button class="btn btn-sm btn-primary ml-auto text-xs" onclick={refreshQueue} disabled={queueState.loading}>
+      {#if queueState.loading}<span class="loading loading-spinner loading-xs"></span>{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+      Refresh
+    </button>
+  </header>
 
-    <div class="flex flex-wrap items-center gap-2">
-      {#if queueState.connected}
-        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
-      {/if}
-      <button class="btn btn-sm btn-neutral text-xs" onclick={refreshQueue} disabled={queueState.loading}>
-        {#if queueState.loading}
-          <span class="loading loading-spinner loading-xs mr-1.5"></span>
-        {:else}
-          <RefreshCw class="mr-1.5 h-4 w-4" />
-        {/if}
-        Refresh
-      </button>
-    </div>
-  </div>
-
-  <div class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="Encoding kind filters">
+  <nav class="tabs tabs-border mt-2 border-b border-base-300 px-5" aria-label="Encoding kind filters">
     {#each kindTabs as tab}
-      <button
-        type="button"
-        onclick={() => changeKindFilter(tab.key)}
-        class={['btn btn-sm shrink-0 text-xs', kindFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
-        aria-pressed={kindFilter === tab.key}
-      >
-        {tab.label}
-      </button>
+      <button type="button" onclick={() => changeKindFilter(tab.key)} class={['tab mr-6 px-0 text-sm', kindFilter === tab.key && 'tab-active']} aria-pressed={kindFilter === tab.key}>{tab.label}</button>
     {/each}
-  </div>
+  </nav>
 
-  <div class="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Encoding status filters">
+  <div class="p-3.5 sm:p-5">
+    <div class="flex flex-wrap gap-2" aria-label="Encoding status filters">
       {#each statusTabs as tab}
-        <button
-          type="button"
-          onclick={() => changeStatusFilter(tab.key)}
-          class={['btn btn-sm shrink-0 gap-2 text-xs', statusFilter === tab.key ? 'btn-primary' : 'btn-neutral']}
-          aria-current={statusFilter === tab.key ? 'page' : undefined}
-        >
-          {tab.label}
-        </button>
+        <button type="button" onclick={() => changeStatusFilter(tab.key)} class={['btn btn-sm text-xs font-normal', statusFilter === tab.key ? 'btn-primary' : 'bg-base-100']} aria-pressed={statusFilter === tab.key}>{tab.label}</button>
       {/each}
     </div>
 
-    <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="w-full text-sm sm:w-40" />
-      <input class="input w-full text-sm sm:w-48" type="search" bind:value={storageKey} oninput={scheduleSearch} aria-label="Filter by storage key" placeholder="Storage key..." />
-      <input class="input w-full text-sm lg:w-80" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search encoding jobs" placeholder="Search title or media guid..." />
+    <div class="my-3.5 flex flex-wrap gap-2">
+      <label class="input input-sm flex min-w-40 flex-1 items-center gap-2 bg-base-100">
+        <Search class="h-3.5 w-3.5 shrink-0 text-base-content/40" />
+        <input class="w-full" type="search" bind:value={query} oninput={scheduleSearch} aria-label="Search encoding jobs" placeholder="Search title or media GUID…" />
+      </label>
+      <input class="input input-sm min-w-36 flex-1 bg-base-100 text-xs sm:max-w-48" type="search" bind:value={storageKey} oninput={scheduleSearch} aria-label="Filter by storage key" placeholder="Storage key…" />
+      <Select items={pageSizeOptions} bind:value={pageSize} onchange={changePageSize} aria-label="Jobs per page" class="select-sm w-36 bg-base-100 text-xs" />
     </div>
-  </div>
 
   {#if queueState.error || actionError}
     <div
-      class="alert alert-error mt-5 text-sm"
+      class="alert alert-error my-4 text-sm"
       role="alert"
     >
       <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
@@ -240,106 +217,69 @@
   {/if}
 
   {#if queueState.loading && queueState.rows.length === 0}
-    <div class="mt-16 flex justify-center">
+    <div class="flex justify-center py-16">
       <span class="loading loading-spinner loading-md"></span>
     </div>
   {:else if queueState.rows.length === 0}
-    <div class="mt-8 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="py-10 text-center">
       <Video class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No encoding jobs match this view</p>
       <p class="mt-1 text-sm text-base-content/50">Encode a channel or watch/cast an item to queue one.</p>
     </div>
   {:else}
-    <div class="mt-5 space-y-2">
+    <div class="space-y-2">
       {#each queueState.rows as row (row.item.renditionId)}
         {@const percent = progressPercent(row)}
-        <article class="card border-[length:var(--border)] border-base-300/90 bg-base-200/45 p-4 transition">
-          <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_5rem_minmax(8.5rem,auto)] md:items-center">
+        <article class="card rounded-lg border border-base-300 bg-base-100 p-3.5">
+          <div class="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 max-[470px]:grid-cols-1">
+            <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50 max-[470px]:hidden">{#if row.item.kind === 'Stream'}<Video class="h-4 w-4" />{:else}<Music2 class="h-4 w-4" />{/if}</div>
             <div class="min-w-0">
-              <div class="flex min-w-0 items-center gap-2">
-                {#if row.item.kind === 'Stream'}
-                  <span class="badge badge-sm shrink-0 badge-accent text-[10px] font-bold text-accent-content">HLS</span>
-                {/if}
-                <h2 class="min-w-0 truncate text-sm font-semibold text-base-content" title={row.item.title}>
-                  {row.item.title}
-                </h2>
-                <span class={['badge badge-sm shrink-0 text-[10px] font-bold', statusBadgeClass(row.item.status)]}>
-                  {row.item.status}
-                </span>
-              </div>
-              <p class="mt-1 truncate text-xs text-base-content/50">
+              <h3 class="break-words text-sm font-semibold text-base-content">{row.item.title}</h3>
+              <p class="mt-1 break-all text-xs text-base-content/55">
                 {row.item.storageKey}
                 {#if row.item.storagePath} · {row.item.storagePath}{/if}
               </p>
-              {#if row.progress}
-                <p class="mt-1 truncate text-[11px] text-base-content/50">{progressLine(row.progress)}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-base-content/60">
+                <span class={['badge badge-sm rounded text-[11px]', statusBadgeClass(row.item.status)]}>{row.item.status === 'Pending' ? 'Queued' : row.item.status}</span>
+                <span>{row.item.kind === 'Stream' ? 'Stream · HLS' : 'Audio · Opus'}</span>
+                {#if row.progress}<span>{progressLine(row.progress)}</span>{/if}
+              </div>
+              {#if row.item.status === 'Processing'}
+                <progress class="progress progress-primary mt-3 block h-1 w-full" value={percent} max="100" aria-label="Encoding progress"></progress>
               {/if}
               {#if row.item.status === 'Failed' && row.item.errorMessage}
-                <p class="mt-2 line-clamp-1 text-xs text-error">{row.item.errorMessage}</p>
+                <p class="mt-2 break-words text-xs text-error">{row.item.errorMessage}</p>
               {/if}
-              <p class="mt-2 text-[11px] text-base-content/40">
+              <p class="mt-2 text-xs text-base-content/55">
                 {row.item.sizeBytes ? formatBytes(row.item.sizeBytes) : '—'}
                 {#if row.item.durationSeconds}· {formatDuration(row.item.durationSeconds)}{/if}
                 · updated {formatRelativeDate(row.item.updatedAt)}
               </p>
-            </div>
-
-            <div class="flex items-center justify-center">
-              <div
-                class="radial-progress text-primary"
-                style={`--value:${percent}; --size:3.5rem;`}
-                role="progressbar"
-                aria-valuenow={Math.round(percent)}
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <span class="text-[11px] font-semibold text-base-content">{Math.round(percent)}%</span>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <a href={`/watch/${row.item.mediaGuid}`} class="btn btn-sm btn-accent text-xs"><Play class="h-4 w-4" />Watch</a>
               </div>
-            </div>
-
-            <div class="flex flex-wrap items-center justify-end gap-1.5">
-              <a
-                href={`/watch/${row.item.mediaGuid}`}
-                class="btn btn-sm btn-neutral text-xs"
-                title="Watch"
-                aria-label="Watch"
-              >
-                <Play class="h-4 w-4" />
-                Watch
-              </a>
-              {#if row.item.status === 'Processing' || row.item.status === 'Pending'}
-                <button type="button" class="btn btn-sm btn-neutral text-xs" title="Stop encode" aria-label="Stop encode">
-                  <Square class="h-4 w-4" />
-                  Stop
-                </button>
-              {/if}
-              {#if row.item.status === 'Failed'}
-                <button type="button" class="btn btn-sm btn-neutral text-xs" title="Retry encode" aria-label="Retry encode">
-                  <RotateCw class="h-4 w-4" />
-                  Retry
-                </button>
-              {/if}
             </div>
           </div>
         </article>
       {/each}
     </div>
 
-    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p class="text-xs text-base-content/40">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <p class="text-xs tabular-nums text-base-content/55">
         Showing {Math.min((page - 1) * pageSize + 1, queueState.totalCount)}-{Math.min(page * pageSize, queueState.totalCount)}
         of {queueState.totalCount}
       </p>
       <div class="flex gap-2">
-        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
-          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
+        <button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={page <= 1 || queueState.loading} onclick={previousPage}>
+          <ChevronLeft class="h-3.5 w-3.5" />
           Previous
         </button>
-        <button class="btn btn-sm btn-neutral text-xs" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
+        <button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={!queueState.nextCursor || queueState.loading} onclick={nextPage}>
           Next
-          <ChevronRight class="ml-1 h-3.5 w-3.5" />
+          <ChevronRight class="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
   {/if}
-</div>
+  </div>
+</section>
