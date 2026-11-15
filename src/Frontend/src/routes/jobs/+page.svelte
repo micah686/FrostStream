@@ -219,7 +219,14 @@
     document.addEventListener('visibilitychange', onVisible);
     const collectionRefresh = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (view === 'collections' || selectedCollection) void loadCollections();
+      if (view === 'collections' || selectedCollection) {
+        // Completed collections do not need repeated full-history scans. Keep polling
+        // while jobs are changing or a collection is still discovering its children.
+        if (collectionRows.some(row => isActive(row.job.status) || isQueued(row.job.status))
+          || collectionGroups.some(group => group.status === 'Queued' || group.status === 'Expanding')) {
+          void loadCollections();
+        }
+      }
       else void fetchCollections().then(groups => { collectionGroups = groups; }).catch(() => {});
     }, 15_000);
     return () => {
