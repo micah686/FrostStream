@@ -4,6 +4,7 @@ export interface CreatorSource {
   id: number;
   sourceUrl: string;
   configSetKey: string | null;
+  accountId: number | null;
   scanEnabled: boolean;
   incrementalPageSize: number;
   consecutiveKnownThreshold: number;

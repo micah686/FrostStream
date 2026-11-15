@@ -60,6 +60,17 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
   let lastTotalCount = 0;
   let lastNextCursor: string | null = null;
   let currentParams: QueueListParams = { limit: 50, sort: 'createdAt' };
+  let eventRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // A collection can emit a state event for every job at once. Coalesce those
+  // events into one snapshot rather than requesting the same page for each job.
+  function scheduleEventRefresh(): void {
+    if (eventRefreshTimer) return;
+    eventRefreshTimer = setTimeout(() => {
+      eventRefreshTimer = undefined;
+      void refresh().catch(() => {});
+    }, 500);
+  }
 
   const publish = (patch: Partial<Omit<DownloadQueueState, 'rows' | 'totalCount'>> = {}) =>
     store.update((state) => ({
@@ -109,7 +120,7 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
       const row = rows.get(frame.jobId);
       if (row) {
         if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup, currentParams.statuses)) {
-          void refresh();
+          scheduleEventRefresh();
           return;
         }
         const runChanged = frame.runId !== row.job.runId || frame.runNumber !== row.job.runNumber;
@@ -136,11 +147,11 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
         if ((row.job.stage === 'Metadata' && frame.stage !== 'Metadata') || ['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
           normalizeStatus(frame.status)
         )) {
-          void refresh();
+          scheduleEventRefresh();
         }
       } else {
         if (!currentParams.cursor) {
-          void refresh();
+          scheduleEventRefresh();
         }
       }
     }
@@ -182,6 +193,8 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
     disconnect() {
       controller?.abort();
       controller = null;
+      clearTimeout(eventRefreshTimer);
+      eventRefreshTimer = undefined;
       publish({ connected: false });
     },
     async setParams(params: QueueListParams) {
