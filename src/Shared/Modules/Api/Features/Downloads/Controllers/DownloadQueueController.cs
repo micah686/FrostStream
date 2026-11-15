@@ -65,8 +65,21 @@ public sealed class DownloadQueueController(
         [FromQuery] string sort = "createdAt",
         [FromQuery] DownloadQueueStateGroup stateGroup = DownloadQueueStateGroup.All,
         [FromQuery] DownloadJobStatus? status = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [FromQuery] string? statuses = null)
     {
+        DownloadJobStatus[]? parsedStatuses = null;
+        if (statuses is not null || HttpContext?.Request.Query.ContainsKey("statuses") == true)
+        {
+            var parsed = new List<DownloadJobStatus>();
+            foreach (var value in (statuses ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!Enum.TryParse<DownloadJobStatus>(value, true, out var item) || !Enum.IsDefined(item))
+                    return BadRequest(new ProblemDetails { Title = "Invalid download status.", Status = 400 });
+                parsed.Add(item);
+            }
+            parsedStatuses = parsed.ToArray();
+        }
         var normalizedSort = sort.Trim().ToLowerInvariant() switch
         {
             "priority" => DownloadQueueSort.Priority,
@@ -78,6 +91,7 @@ public sealed class DownloadQueueController(
 
         var request = new DownloadQueueListRequest
         {
+            Statuses = parsedStatuses,
             State = state,
             Status = status,
             StateGroup = stateGroup,

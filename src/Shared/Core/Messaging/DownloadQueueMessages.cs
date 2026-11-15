@@ -72,6 +72,7 @@ public enum DownloadQueueStateGroup
 /// </summary>
 public sealed record DownloadQueueListRequest
 {
+    public DownloadJobStatus[]? Statuses { get; init; }
     public DownloadJobStatus? Status { get; init; }
     /// <summary>Legacy-only filter retained for older clients; V2 clients use <see cref="Status"/>.</summary>
     public DownloadJobState? State { get; init; }
@@ -154,6 +155,7 @@ public sealed record DownloadQueueJobDto
     public int WarningCount { get; init; }
     public string? Title { get; init; }
     public string? CollectionTitle { get; init; }
+    public string? CollectionSourceUrl { get; init; }
     public required string SourceUrl { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }

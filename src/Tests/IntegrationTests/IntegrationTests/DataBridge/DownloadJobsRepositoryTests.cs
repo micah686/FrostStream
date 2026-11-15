@@ -314,6 +314,27 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
+    public async Task Queue_Filters_Multiple_Statuses_Before_Paging()
+    {
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.AddRange(
+            Job(Guid.NewGuid(), DownloadJobState.Completed),
+            Job(Guid.NewGuid(), DownloadJobState.DownloadQueued),
+            Job(Guid.NewGuid(), DownloadJobState.FailedPermanent));
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+        var result = await repository.QueryQueueAsync(new DownloadQueueListRequest
+        {
+            Statuses = [DownloadJobStatus.Queued, DownloadJobStatus.Failed], Limit = 1
+        });
+        result.TotalCount.ShouldBe(2);
+        result.Items.Count.ShouldBe(1);
+        result.NextCursor.ShouldNotBeNull();
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Statuses = [] }))
+            .TotalCount.ShouldBe(0);
+    }
+
+    [Test]
     public async Task Queue_Resolves_Metadata_And_Collection_Titles()
     {
         await using var db = Fixture.CreateDb();
@@ -348,6 +369,7 @@ public sealed class DownloadJobsRepositoryTests
         var item = (await repository.QueryQueueAsync(new DownloadQueueListRequest())).Items.Single();
         item.Title.ShouldBe("Resolved video title");
         item.CollectionTitle.ShouldBe("Creator's uploads");
+        item.CollectionSourceUrl.ShouldBe("https://example.test/playlist");
         (await repository.GetQueueJobAsync(job.JobId))!.Title.ShouldBe(item.Title);
     }
 

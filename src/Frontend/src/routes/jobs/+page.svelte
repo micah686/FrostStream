@@ -6,6 +6,7 @@
     ChevronRight,
     CircleAlert,
     Folder,
+    ExternalLink,
     Search,
     RefreshCw,
     Server,
@@ -26,7 +27,7 @@
   import { listOptionPresets } from '#lib/api/optionPresets.js';
   import JobRow from '#lib/components/jobs/JobRow.svelte';
 
-  type FilterKey = 'working' | 'active' | 'queued' | 'done' | 'failed' | 'stopped' | 'all';
+  type FilterKey = 'active' | 'queued' | 'done' | 'failed' | 'stopped' | 'all';
   type SourceFilterKey = 'all' | 'Direct' | 'Playlist' | 'Channel';
 
   const queue = createDownloadQueueStore();
@@ -43,7 +44,20 @@
   let collectionRows = $state<QueueRow[]>([]);
   let collectionsLoading = $state(false);
   let collectionController: AbortController | undefined;
-  let activeFilter = $state<FilterKey>('working');
+  let selectedFilters = $state<FilterKey[]>(['all']);
+  let statusCounts = $state<Record<string, number>>({});
+  const statusOptions = [
+    { key: 'active', label: 'Active', matches: isActive, statuses: ['Running', 'Stopping', 'Compensating'] },
+    { key: 'queued', label: 'Queued', matches: isQueued, statuses: ['Queued'] },
+    { key: 'failed', label: 'Failed', matches: isFailed, statuses: ['Failed'] },
+    { key: 'stopped', label: 'Stopped', matches: isStopped, statuses: ['Stopped'] },
+    { key: 'done', label: 'Done', matches: isDone, statuses: ['Completed', 'CompletedWithWarnings', 'AlreadyDownloaded', 'Ignored'] }
+  ] as const;
+  const allSelected = $derived(selectedFilters.includes('all'));
+  const selectedStatuses = $derived(statusOptions.filter(option => selectedFilters.includes(option.key)).flatMap(option => [...option.statuses]));
+  function matchesStatus(status: string) {
+    return allSelected || statusOptions.some(option => selectedFilters.includes(option.key) && option.matches(status));
+  }
   let sourceFilter = $state<SourceFilterKey>('all');
   let query = $state('');
   let pageSize = $state(50);
@@ -91,11 +105,6 @@
   const scopedRows = $derived(selectedCollection
     ? liveCollectionRows.filter(row => row.job.correlationId === selectedCollection)
     : queueState.rows);
-  const tabs = $derived(([
-    ['working', 'Working', (status: string) => isActive(status) || isQueued(status)],
-    ['active', 'Active', isActive], ['queued', 'Queued', isQueued], ['done', 'Done', isDone],
-    ['failed', 'Failed', isFailed], ['stopped', 'Stopped', isStopped], ['all', 'All', () => true]
-  ] as const).map(([key, label, matches]) => ({ key, label, count: selectedCollection || activeFilter === 'all' || activeFilter === 'working' ? scopedRows.filter(row => matches(row.job.status)).length : activeFilter === key ? queueState.totalCount : null })));
   const collections = $derived.by(() => {
     const groups = new Map<string, QueueRow[]>();
     for (const row of liveCollectionRows) {
@@ -115,11 +124,12 @@
   const selectedGroup = $derived(collections.find(group => group.id === selectedCollection));
   const visibleCollections = $derived(collections.filter(group => `${group.name} ${group.rows.map(row => row.job.sourceUrl).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
   const collectionMatches = $derived(scopedRows.filter(row => {
-    const matches = { working: (status: string) => isActive(status) || isQueued(status), active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped, all: () => true }[activeFilter];
-    return matches(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.title ?? ''} ${row.job.collectionTitle ?? ''} ${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
+    return matchesStatus(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.title ?? ''} ${row.job.collectionTitle ?? ''} ${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
   }));
-  const visibleRows = $derived(selectedCollection ? collectionMatches.slice((page - 1) * pageSize, page * pageSize) : queueState.rows.filter(row => activeFilter === 'all' || (activeFilter === 'working' ? isActive(row.job.status) || isQueued(row.job.status) : ({ active: isActive, queued: isQueued, done: isDone, failed: isFailed, stopped: isStopped }[activeFilter])(row.job.status))));
-  const matchingCount = $derived(selectedCollection ? collectionMatches.length : activeFilter === 'all' ? queueState.totalCount : queueState.rows.length);
+  const visibleRows = $derived(selectedCollection ? collectionMatches.slice((page - 1) * pageSize, page * pageSize) : queueState.rows.filter(row => matchesStatus(row.job.status)));
+  const matchingCount = $derived(selectedCollection ? collectionMatches.length : selectedFilters.length ? queueState.totalCount : 0);
+  const tabs = $derived(statusOptions.map(option => ({ ...option, count: selectedCollection ? scopedRows.filter(row => option.matches(row.job.status)).length : statusCounts[option.key] })));
+  const allCount = $derived(selectedCollection ? scopedRows.length : statusCounts.all);
   const hasNext = $derived(selectedCollection ? page * pageSize < matchingCount : Boolean(queueState.nextCursor));
 
   $effect(() => {
@@ -152,7 +162,7 @@
     view = next;
     selectedCollection = null;
     query = '';
-    activeFilter = 'working';
+    selectedFilters = ['all'];
     sourceFilter = 'all';
     resetPaging();
     if (searchTimer) window.clearTimeout(searchTimer);
@@ -165,13 +175,14 @@
     selectedCollection = id;
     view = 'jobs';
     query = '';
-    activeFilter = 'working';
+    selectedFilters = ['all'];
     sourceFilter = 'all';
     resetPaging();
   }
 
   onMount(() => {
     queue.connect();
+    void loadStatusCounts().catch(() => {});
     listOptionPresets()
       .then((presets) => {
         optionPresetsByKey = new Map(presets.map((preset) => [preset.key, preset.name]));
@@ -204,7 +215,10 @@
     actionError = null;
     try {
       if (view === 'collections' || selectedCollection) await loadCollections();
-      else await queue.refresh();
+      else {
+        await queue.refresh();
+        await loadStatusCounts();
+      }
     } catch (err) {
       actionError = err instanceof Error ? err.message : 'Could not refresh the queue.';
     }
@@ -213,13 +227,23 @@
   async function applyQueueParams() {
     if (selectedCollection || view === 'collections') return;
     await queue.setParams({
-      stateGroup: activeFilter === 'working' ? 'all' : activeFilter,
+      stateGroup: 'all',
+      statuses: allSelected ? undefined : selectedStatuses.join(','),
       sourceKind: sourceFilter === 'all' ? undefined : sourceFilter,
       q: query.trim() || undefined,
       limit: pageSize,
       cursor,
-      sort: activeFilter === 'queued' ? 'priority' : 'createdAt'
+      sort: selectedFilters.length === 1 && selectedFilters[0] === 'queued' ? 'priority' : 'createdAt'
     });
+    await loadStatusCounts();
+  }
+
+  async function loadStatusCounts() {
+    const counts = await Promise.all(['all', ...statusOptions.map(option => option.key)].map(async stateGroup => {
+      const result = await fetchQueue({ stateGroup: stateGroup as FilterKey, sourceKind: sourceFilter === 'all' ? undefined : sourceFilter, q: query.trim() || undefined, limit: 1 });
+      return [stateGroup, result.totalCount] as const;
+    }));
+    statusCounts = Object.fromEntries(counts);
   }
 
   function resetPaging(): void {
@@ -229,10 +253,12 @@
   }
 
   async function changeFilter(filter: FilterKey): Promise<void> {
-    if (activeFilter === filter) {
-      return;
-    }
-    activeFilter = filter;
+    if (filter === 'all') selectedFilters = allSelected ? [] : ['all'];
+    else if (allSelected) selectedFilters = statusOptions.filter(option => option.key !== filter).map(option => option.key);
+    else selectedFilters = selectedFilters.includes(filter)
+      ? selectedFilters.filter(key => key !== filter && key !== 'all')
+      : [...selectedFilters.filter(key => key !== 'all'), filter];
+    if (statusOptions.every(option => selectedFilters.includes(option.key))) selectedFilters = ['all'];
     resetPaging();
     await applyQueueParams();
   }
@@ -429,6 +455,9 @@
         <button class="link" onclick={() => changeView('jobs')}>All jobs</button><span>/</span><button class="link" onclick={() => changeView('collections')}>Collections</button><span>/</span><span>{selectedGroup.name}</span>
       </nav>
       <h3 class="text-lg font-semibold">{selectedGroup.name}</h3>
+      {#if selectedGroup.rows.find(row => row.job.collectionSourceUrl)?.job.collectionSourceUrl}
+        <a class="btn btn-sm btn-outline mt-2 gap-1.5 text-xs" href={selectedGroup.rows.find(row => row.job.collectionSourceUrl)!.job.collectionSourceUrl!} target="_blank" rel="noopener noreferrer"><ExternalLink class="h-3.5 w-3.5" />View source</a>
+      {/if}
       <p class="mt-1 text-xs text-base-content/55">{selectedGroup.rows.length} jobs · {selectedGroup.done} complete · {selectedGroup.active} active · {selectedGroup.queued} queued · {selectedGroup.failed} failed</p>
       <div class="my-3 flex flex-wrap gap-2">
         <button class="btn btn-sm btn-primary text-xs" onclick={() => stopDownloadGroup(selectedGroup!.rows[0])} disabled={Boolean(actionBusy[selectedGroup.rows[0].job.jobId]) || !(selectedGroup.active + selectedGroup.queued)}>Stop group</button>
@@ -441,13 +470,21 @@
     {/if}
 
     {#if view === 'jobs'}
-      <div class="tabs tabs-border mb-3 flex-nowrap overflow-x-auto" role="tablist" aria-label="Job filters">
-        {#each tabs as tab}
-          <button type="button" onclick={() => changeFilter(tab.key)} class={['tab h-10 shrink-0 gap-2 px-3 text-xs', activeFilter === tab.key && 'tab-active text-primary']} aria-pressed={activeFilter === tab.key} aria-current={activeFilter === tab.key ? 'page' : undefined}>
-            {tab.label}{#if tab.count !== null}<span class="text-[11px] tabular-nums">{tab.count}</span>{/if}
-          </button>
-        {/each}
-      </div>
+      <fieldset class="mb-3" aria-label="Job statuses">
+        <label class="mb-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" class="checkbox checkbox-sm" checked={allSelected} onchange={() => changeFilter('all')} />
+          <span>All</span><span class="text-base-content/50 tabular-nums">{allCount?.toLocaleString() ?? '…'}</span>
+        </label>
+        <div class="flex flex-wrap gap-2">
+          {#each tabs as tab}
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-3 py-2.5 text-sm">
+              <input type="checkbox" class="checkbox checkbox-sm" checked={allSelected || selectedFilters.includes(tab.key)} onchange={() => changeFilter(tab.key)} />
+              <span>{tab.label}</span><span class="text-base-content/50 tabular-nums">{tab.count?.toLocaleString() ?? '…'}</span>
+            </label>
+          {/each}
+        </div>
+        <p class="mt-3 text-xs text-base-content/60" aria-live="polite">Showing <span class="font-medium">{allSelected ? 'All statuses' : tabs.filter(tab => selectedFilters.includes(tab.key)).map(tab => tab.label).join(', ') || 'No statuses selected'}</span></p>
+      </fieldset>
     {/if}
     <div class="my-3.5 flex flex-wrap gap-2">
       <label class="input input-sm flex min-w-40 flex-1 items-center gap-2 bg-base-100">

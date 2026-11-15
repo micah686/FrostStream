@@ -256,10 +256,6 @@
     return kind === 'playlist' || kind === 'channel';
   }
 
-  function shortCollectionId(id: string): string {
-    return id.split('-')[0] ?? id.slice(0, 8);
-  }
-
   function displayStatus(r: QueueRow): string {
     if (normalizeStatus(r.job.status) === 'running' && hasActiveDownloadProgress(r.progress)) {
       return r.progress?.phase?.trim() || r.job.status;
@@ -322,24 +318,15 @@
 </script>
 
 <article class="card overflow-hidden rounded-lg border border-base-300 bg-base-100">
-  <div class="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 p-3.5 max-[470px]:grid-cols-1">
+  <div class="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] gap-3 p-3.5 max-[470px]:grid-cols-[minmax(0,1fr)_auto]">
     <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50 max-[470px]:hidden"><Film class="h-4 w-4" /></div>
     <div class="min-w-0">
-      <div class="flex items-start justify-between gap-3">
-        <h3 class="break-words text-sm font-semibold text-base-content">{job.title?.trim() || displayTitle(job.sourceUrl)}</h3>
-        <span class="badge badge-sm badge-ghost shrink-0 gap-1 rounded text-[11px] text-base-content/60">
-          {#if job.sourceKind.toLowerCase() === 'channel'}<Tv class="h-3 w-3" />Channel
-          {:else if job.sourceKind.toLowerCase() === 'playlist'}<ListVideo class="h-3 w-3" />Playlist
-          {:else}<FileVideo class="h-3 w-3" />Single{/if}
-        </span>
-      </div>
-      <div class="mt-1 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/55">
+      <h3 class="break-words text-sm font-semibold text-base-content">{job.title?.trim() || displayTitle(job.sourceUrl)}</h3>
+      <div class="mt-1 text-xs text-base-content/55">
         <span>{provider}</span>
-        {#if isCollectionJob(job)}
-          <button class="link inline-flex items-center gap-1 text-primary" onclick={() => oncollection?.(job.correlationId)}><Folder class="h-3 w-3" />Collection {shortCollectionId(job.correlationId)}</button>
-        {:else}<span>Direct</span>{/if}
+        {#if !isCollectionJob(job)}<span class="ml-3">Direct</span>{/if}
       </div>
-      <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-base-content/60">
         <span class={['badge badge-sm rounded text-[11px]', statusTone(job.status)]}>{displayStatus(row)}</span>
         <span>{displayStage(row)}</span>
       </div>
@@ -461,6 +448,16 @@
         <span>{isQueued(job.status) ? 'Workflow not started' : isDone(job.status) ? 'Workflow finished' : `Workflow · ${displayStage(row)}`}</span>
         <ChevronDown class={['h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none', expanded && 'rotate-180']} />
       </button>
+    </div>
+    <div class="flex flex-col items-end gap-1.5">
+      <span class="badge badge-sm badge-ghost gap-1 rounded text-[11px] text-base-content/60">
+        {#if job.sourceKind.toLowerCase() === 'channel'}<Tv class="h-3 w-3" />Channel
+        {:else if job.sourceKind.toLowerCase() === 'playlist'}<ListVideo class="h-3 w-3" />Playlist
+        {:else}<FileVideo class="h-3 w-3" />Single{/if}
+      </span>
+      {#if isCollectionJob(job)}
+        <button type="button" class="btn btn-sm btn-accent gap-1 text-xs" onclick={() => oncollection?.(job.correlationId)}><Folder class="h-4 w-4" />Collection</button>
+      {/if}
     </div>
   </div>
 

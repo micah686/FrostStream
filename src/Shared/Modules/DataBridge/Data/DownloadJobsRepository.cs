@@ -557,7 +557,11 @@ public sealed class DownloadJobsRepository(
 
         var query = db.DownloadJobs.AsNoTracking().AsQueryable();
 
-        if (request.Status is { } status)
+        if (request.Statuses is { } statuses)
+        {
+            query = query.Where(x => statuses.Contains(x.Status));
+        }
+        else if (request.Status is { } status)
         {
             query = query.Where(x => x.Status == status);
         }
@@ -746,13 +750,19 @@ public sealed class DownloadJobsRepository(
                 on playlist.PlaylistId equals source.PlaylistId
             where correlations.Contains(playlist.CorrelationId)
             orderby playlist.UpdatedAt descending
-            select new { playlist.CorrelationId, source.Title }).ToListAsync(ct);
+            select new { playlist.CorrelationId, source.Title, playlist.SourceUrl }).ToListAsync(ct);
+        var groupSources = await db.DownloadGroups.AsNoTracking()
+            .Where(x => correlations.Contains(x.CorrelationId))
+            .Select(x => new { x.CorrelationId, x.SourceUrl })
+            .ToListAsync(ct);
         return jobs.Select(job => job with
         {
             Title = titles.GetValueOrDefault(job.JobId)
                 ?? entries.FirstOrDefault(x => x.JobId == job.JobId && !string.IsNullOrWhiteSpace(x.EntryTitle))?.EntryTitle,
             CollectionTitle = collections.FirstOrDefault(x => x.CorrelationId == job.CorrelationId
-                && !string.IsNullOrWhiteSpace(x.Title))?.Title
+                && !string.IsNullOrWhiteSpace(x.Title))?.Title,
+            CollectionSourceUrl = collections.FirstOrDefault(x => x.CorrelationId == job.CorrelationId)?.SourceUrl
+                ?? groupSources.FirstOrDefault(x => x.CorrelationId == job.CorrelationId)?.SourceUrl
         }).ToList();
     }
 

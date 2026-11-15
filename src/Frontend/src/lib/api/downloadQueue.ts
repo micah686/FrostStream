@@ -57,6 +57,7 @@ export interface DownloadQueueJob {
   state: DownloadJobState;
   title?: string | null;
   collectionTitle?: string | null;
+  collectionSourceUrl?: string | null;
   sourceUrl: string;
   requestedBy: string | null;
   storageKey: string | null;
@@ -82,6 +83,7 @@ export interface DownloadQueueListResponse {
 }
 
 export interface QueueListParams {
+  statuses?: string;
   status?: DownloadJobStatus;
   stateGroup?: 'all' | 'active' | 'queued' | 'failed' | 'done' | 'stopped';
   sourceKind?: DownloadSourceKind;
@@ -164,7 +166,7 @@ export async function fetchQueue(
 ): Promise<DownloadQueueListResponse> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value !== undefined && value !== null && (value !== '' || key === 'statuses')) {
       query.set(key, String(value));
     }
   }

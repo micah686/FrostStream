@@ -108,7 +108,7 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
       const frame = JSON.parse(event.data) as StateFrame;
       const row = rows.get(frame.jobId);
       if (row) {
-        if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup)) {
+        if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup, currentParams.statuses)) {
           void refresh();
           return;
         }
@@ -192,7 +192,8 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
   };
 }
 
-function statusMatchesFilter(status: string, exactStatus?: string, stateGroup?: string): boolean {
+function statusMatchesFilter(status: string, exactStatus?: string, stateGroup?: string, statuses?: string): boolean {
+  if (statuses !== undefined) return statuses.split(',').some(value => normalizeStatus(value) === normalizeStatus(status));
   if (exactStatus) {
     return normalizeStatus(status) === normalizeStatus(exactStatus);
   }
