@@ -4,6 +4,7 @@ import { mockApi } from './support/api';
 test.beforeEach(async ({ page }) => {
   await mockApi(page, async (route, url) => {
     if (url.pathname === '/api/downloads/queue') { await route.fulfill({ json: { items: [], totalCount: 0, nextCursor: null } }); return true; }
+    if (url.pathname === '/api/downloads/queue/collections') { await route.fulfill({ json: { items: [] } }); return true; }
     return false;
   });
 });
@@ -14,8 +15,9 @@ test('filters and searches the download queue', async ({ page }) => {
   const sourceRequest = page.waitForRequest(r => new URL(r.url()).pathname === '/api/downloads/queue' && new URL(r.url()).searchParams.get('sourceKind') === 'Playlist');
   await page.getByLabel('Job source filters').getByRole('button', { name: 'Playlists' }).click();
   await sourceRequest;
-  const filterRequest = page.waitForRequest(r => new URL(r.url()).pathname === '/api/downloads/queue' && new URL(r.url()).searchParams.get('stateGroup') === 'queued');
-  await page.getByLabel('Job filters').getByRole('button', { name: /Queued/ }).click();
+  const filterRequest = page.waitForRequest(r => new URL(r.url()).pathname === '/api/downloads/queue' && new URL(r.url()).searchParams.get('statuses') === 'Queued');
+  await page.locator('fieldset[aria-label="Job statuses"] label').first().locator('input[type="checkbox"]').click();
+  await page.locator('fieldset[aria-label="Job statuses"] label').filter({ hasText: 'Queued' }).locator('input[type="checkbox"]').click();
   expect(new URL((await filterRequest).url()).searchParams.get('sort')).toBe('priority');
   const search = page.waitForRequest(r => new URL(r.url()).pathname === '/api/downloads/queue' && new URL(r.url()).searchParams.get('q') === 'example');
   await page.getByLabel('Search jobs').fill('example');
@@ -65,11 +67,26 @@ test('collections include subsequent queue pages and open a scoped job list', as
   await expect(page.getByText('1 complete', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open collection' }).click();
   await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
-  await page.getByLabel('Job filters').getByRole('button', { name: /Failed/ }).click();
+  await page.locator('fieldset[aria-label="Job statuses"] label').first().locator('input[type="checkbox"]').click();
+  await page.locator('fieldset[aria-label="Job statuses"] label').filter({ hasText: 'Failed' }).locator('input[type="checkbox"]').click();
   await expect(page.getByRole('heading', { name: 'third', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'first', exact: true })).toHaveCount(0);
   await page.getByLabel('Breadcrumb').getByRole('button', { name: 'All jobs' }).click();
   await expect(page.getByRole('heading', { name: 'first', exact: true })).toBeVisible();
+});
+
+test('shows a queued collection before its item listing runs', async ({ page }) => {
+  await page.route(url => url.pathname === '/api/downloads/queue/collections', route => route.fulfill({ json: { items: [{
+    groupId: 'group-1', correlationId: 'collection-1', kind: 'Playlist', status: 'Queued',
+    sourceUrl: 'https://example.com/playlist', createdAt: '2026-11-14T08:00:00Z',
+    updatedAt: '2026-11-14T08:00:00Z', totalJobs: 0, completedJobs: 0, failedJobs: 0
+  }] } }));
+  await page.goto('/jobs');
+  await expect(page.getByLabel('Queued collections').getByText('Waiting for worker before discovery starts')).toBeVisible();
+  await page.getByRole('button', { name: 'Collections', exact: true }).click();
+  await expect(page.getByText('Waiting for worker before discovery starts')).toBeVisible();
+  await page.getByRole('button', { name: 'Open collection' }).click();
+  await expect(page.getByText('Waiting for worker before discovery starts.')).toBeVisible();
 });
 
 test('workflow details show recorded stages for the current run and retain job controls on mobile', async ({ page }) => {

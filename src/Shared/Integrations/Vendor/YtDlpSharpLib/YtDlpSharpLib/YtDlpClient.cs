@@ -230,7 +230,7 @@ public sealed class YtDlpClient : IYtDlpClient
         var args = new List<string>
         {
             "--dump-single-json",
-            "--no-playlist"
+            flat ? "--yes-playlist" : "--no-playlist"
         };
 
         if (flat)
@@ -295,6 +295,8 @@ public sealed class YtDlpClient : IYtDlpClient
         {
             "--dump-json",
             "--yes-playlist",
+            // Streaming fallback is for listing card titles, never per-video extraction.
+            "--flat-playlist",
             "--ignore-no-formats-error"
         };
 

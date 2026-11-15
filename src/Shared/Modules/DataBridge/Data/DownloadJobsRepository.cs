@@ -744,6 +744,13 @@ public sealed class DownloadJobsRepository(
         var entries = await db.PlaylistItems.AsNoTracking()
             .Where(x => ids.Contains(x.JobId))
             .Select(x => new { x.JobId, x.EntryTitle }).ToListAsync(ct);
+        // Creator scans persist flat-listing titles before their download commands are published.
+        // Reuse those titles for queued cards without opening each video page.
+        var urls = jobs.Select(x => x.SourceUrl).ToArray();
+        var discovered = await db.DiscoveredMedia.AsNoTracking()
+            .Where(x => urls.Contains(x.CanonicalUrl) && x.Title != null)
+            .OrderByDescending(x => x.LastSeenAt)
+            .Select(x => new { x.CanonicalUrl, x.Title }).ToListAsync(ct);
         var collections = await (
             from playlist in db.Playlists.AsNoTracking()
             join source in db.PlaylistSourceMetadata.AsNoTracking()
@@ -758,7 +765,8 @@ public sealed class DownloadJobsRepository(
         return jobs.Select(job => job with
         {
             Title = titles.GetValueOrDefault(job.JobId)
-                ?? entries.FirstOrDefault(x => x.JobId == job.JobId && !string.IsNullOrWhiteSpace(x.EntryTitle))?.EntryTitle,
+                ?? entries.FirstOrDefault(x => x.JobId == job.JobId && !string.IsNullOrWhiteSpace(x.EntryTitle))?.EntryTitle
+                ?? discovered.FirstOrDefault(x => x.CanonicalUrl == job.SourceUrl && !string.IsNullOrWhiteSpace(x.Title))?.Title,
             CollectionTitle = collections.FirstOrDefault(x => x.CorrelationId == job.CorrelationId
                 && !string.IsNullOrWhiteSpace(x.Title))?.Title,
             CollectionSourceUrl = collections.FirstOrDefault(x => x.CorrelationId == job.CorrelationId)?.SourceUrl

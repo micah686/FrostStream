@@ -32,6 +32,7 @@ public static class EndpointIds
     // Downloads
     public const string DownloadsCreate = "downloads.create";
     public const string DownloadsQueueList = "downloads.queue.list";
+    public const string DownloadsCollectionsList = "downloads.collections.list";
     public const string DownloadsQueueGet = "downloads.queue.get";
     public const string DownloadsQueueHistory = "downloads.queue.history";
     public const string DownloadsQueueMedia = "downloads.queue.media";
@@ -61,6 +62,7 @@ public static class EndpointIds
     public const string ImportsSessionsCleanup = "imports.sessions.cleanup";
     public const string ImportsIncomingBrowse = "imports.incoming.browse";
     public const string WorkersList = "workers.list";
+    public const string WorkersCapacityUpdate = "workers.capacity.update";
     public const string MediaToolsUpdate = "media-tools.update";
 
     // Storage
@@ -275,6 +277,7 @@ public static class EndpointCatalog
     [
         new(EndpointIds.DownloadsCreate, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueList, Bundles.Downloading),
+        new(EndpointIds.DownloadsCollectionsList, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueGet, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueHistory, Bundles.Downloading),
         new(EndpointIds.DownloadsQueueMedia, Bundles.Downloading),
@@ -304,6 +307,7 @@ public static class EndpointCatalog
         new(EndpointIds.ImportsSessionsCleanup, Bundles.Downloading),
         new(EndpointIds.ImportsIncomingBrowse, Bundles.Downloading),
         new(EndpointIds.WorkersList, Bundles.Management),
+        new(EndpointIds.WorkersCapacityUpdate, Bundles.Management),
         new(EndpointIds.MediaToolsUpdate, Bundles.Management),
 
         new(EndpointIds.StorageLocalCreate, Bundles.Storage),

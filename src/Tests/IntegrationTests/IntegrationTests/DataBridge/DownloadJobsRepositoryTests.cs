@@ -338,7 +338,7 @@ public sealed class DownloadJobsRepositoryTests
     public async Task Queue_Resolves_Metadata_And_Collection_Titles()
     {
         await using var db = Fixture.CreateDb();
-        var job = Job(Guid.NewGuid(), DownloadJobState.Completed);
+        var job = Job(Guid.NewGuid(), DownloadJobState.Queued);
         var playlistId = Guid.NewGuid();
         db.DownloadJobs.Add(job);
         db.Playlists.Add(new PlaylistEntity

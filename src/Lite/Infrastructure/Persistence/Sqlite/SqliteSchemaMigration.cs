@@ -28,6 +28,25 @@ internal static class SqliteSchemaMigrations
                  path TEXT NOT NULL PRIMARY KEY,
                  payload BLOB NOT NULL
              );
+             """),
+         new(5, "Persist per-worker download capacity", """
+             CREATE TABLE jobs_worker_capacities (
+                 worker_id TEXT NOT NULL PRIMARY KEY,
+                 max_active_jobs INTEGER NOT NULL CHECK (max_active_jobs BETWEEN 1 AND 32)
+             );
+             ALTER TABLE jobs_download_jobs ADD COLUMN assigned_worker_id TEXT;
+             CREATE INDEX ix_download_jobs_assigned_worker_id ON jobs_download_jobs(assigned_worker_id);
+             """),
+         new(6, "Reserve worker capacity for collection discovery", """
+             CREATE TABLE jobs_collection_worker_leases (
+                 dispatch_id TEXT NOT NULL PRIMARY KEY,
+                 worker_id TEXT NOT NULL,
+                 group_id TEXT,
+                 expires_at INTEGER NOT NULL,
+                 released_at INTEGER
+             );
+             CREATE INDEX ix_jobs_collection_worker_leases_worker_id_released_at_expires_at
+                 ON jobs_collection_worker_leases(worker_id, released_at, expires_at);
              """)];
 
     /// <summary>Explicit rebuild descriptions must supply the full new table DDL and recreate all indexes/triggers.</summary>

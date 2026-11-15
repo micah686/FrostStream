@@ -14,6 +14,7 @@
   } from '@lucide/svelte';
   import {
     fetchQueue,
+    fetchCollections,
     cleanupHistory,
     clearProviderCircuit,
     setPriority,
@@ -22,6 +23,7 @@
     stopGroup,
     stopJob
   } from '#lib/api/downloadQueue.js';
+  import type { DownloadCollection } from '#lib/api/downloadQueue.js';
   import { createDownloadQueueStore, type DownloadQueueState, type QueueRow } from '#lib/stores/downloadQueue.js';
   import { isActive, isDone, isFailed, isQueued, isStopped } from '#lib/jobs/jobState.js';
   import { listOptionPresets } from '#lib/api/optionPresets.js';
@@ -42,6 +44,7 @@
   let view = $state<'jobs' | 'collections'>('jobs');
   let selectedCollection = $state<string | null>(null);
   let collectionRows = $state<QueueRow[]>([]);
+  let collectionGroups = $state<DownloadCollection[]>([]);
   let collectionsLoading = $state(false);
   let collectionController: AbortController | undefined;
   let selectedFilters = $state<FilterKey[]>(['all']);
@@ -113,16 +116,31 @@
       group.push(row);
       groups.set(row.job.correlationId, group);
     }
-    return [...groups].map(([id, rows]) => ({ id, rows, kind: rows[0].job.sourceKind,
-      name: `Collection_${id}_${rows.find(row => row.job.collectionTitle?.trim())?.job.collectionTitle?.trim() || rows[0].job.sourceKind}`,
+    const records = new Map(collectionGroups.map(group => [group.correlationId, group]));
+    return [...new Set([...records.keys(), ...groups.keys()])].map(id => {
+      const rows = groups.get(id) ?? [];
+      const record = records.get(id);
+      return { id, rows, kind: rows[0]?.job.sourceKind ?? record?.kind ?? 'Playlist',
+      name: rows.find(row => row.job.collectionTitle?.trim())?.job.collectionTitle?.trim()
+        || record?.sourceUrl || `Collection ${id}`,
+      sourceUrl: record?.sourceUrl ?? rows[0]?.job.collectionSourceUrl ?? rows[0]?.job.sourceUrl,
+      createdAt: record?.createdAt ?? rows[0]?.job.createdAt,
+      status: record?.status,
       done: rows.filter(row => isDone(row.job.status)).length,
       active: rows.filter(row => isActive(row.job.status)).length,
       queued: rows.filter(row => isQueued(row.job.status)).length,
       failed: rows.filter(row => isFailed(row.job.status)).length
-    }));
+      };
+    });
   });
   const selectedGroup = $derived(collections.find(group => group.id === selectedCollection));
-  const visibleCollections = $derived(collections.filter(group => `${group.name} ${group.rows.map(row => row.job.sourceUrl).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
+  const visibleCollections = $derived(collections.filter(group => `${group.name} ${group.sourceUrl ?? ''} ${group.rows.map(row => row.job.sourceUrl).join(' ')}`.toLowerCase().includes(query.toLowerCase())));
+  const holdingCollectionCards = $derived(collectionGroups.filter(group =>
+    (group.status === 'Queued' || group.status === 'Expanding')
+    && (allSelected || (group.status === 'Queued' ? selectedFilters.includes('queued') : selectedFilters.includes('active')))
+    && (sourceFilter === 'all' || group.kind.toLowerCase() === sourceFilter.toLowerCase()
+      || (sourceFilter === 'Channel' && group.kind === 'CreatorMonitor'))
+    && `${group.sourceUrl} ${group.correlationId}`.toLowerCase().includes(query.toLowerCase())));
   const collectionMatches = $derived(scopedRows.filter(row => {
     return matchesStatus(row.job.status) && (sourceFilter === 'all' || row.job.sourceKind === sourceFilter) && `${row.job.title ?? ''} ${row.job.collectionTitle ?? ''} ${row.job.sourceUrl} ${row.job.jobId}`.toLowerCase().includes(query.toLowerCase());
   }));
@@ -150,7 +168,8 @@
         rows.push(...response.items.map(job => ({ job })));
         next = response.nextCursor ?? undefined;
       } while (next && !controller.signal.aborted);
-      if (!controller.signal.aborted) collectionRows = rows;
+      const groups = await fetchCollections((input, init) => fetch(input, { ...init, signal: controller.signal }));
+      if (!controller.signal.aborted) { collectionRows = rows; collectionGroups = groups; }
     } catch (err) {
       if (!controller.signal.aborted) actionError = err instanceof Error ? err.message : 'Could not load collections.';
     } finally {
@@ -182,6 +201,7 @@
 
   onMount(() => {
     queue.connect();
+    void fetchCollections().then(groups => { collectionGroups = groups; }).catch(() => {});
     void loadStatusCounts().catch(() => {});
     listOptionPresets()
       .then((presets) => {
@@ -197,8 +217,14 @@
       }
     };
     document.addEventListener('visibilitychange', onVisible);
+    const collectionRefresh = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (view === 'collections' || selectedCollection) void loadCollections();
+      else void fetchCollections().then(groups => { collectionGroups = groups; }).catch(() => {});
+    }, 15_000);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(collectionRefresh);
       if (searchTimer) {
         window.clearTimeout(searchTimer);
       }
@@ -344,15 +370,15 @@
     }
   }
 
-  async function stopDownloadGroup(row: QueueRow) {
-    await runAction(row.job.jobId, 'group-stop', async () => {
-      await stopGroup(row.job.correlationId, 'Stopped from the jobs page.');
+  async function stopDownloadGroup(correlationId: string) {
+    await runAction(correlationId, 'group-stop', async () => {
+      await stopGroup(correlationId, 'Stopped from the jobs page.');
     });
   }
 
-  async function startDownloadGroup(row: QueueRow) {
-    await runAction(row.job.jobId, 'group-start', async () => {
-      await startGroup(row.job.correlationId);
+  async function startDownloadGroup(correlationId: string) {
+    await runAction(correlationId, 'group-start', async () => {
+      await startGroup(correlationId);
     });
   }
 
@@ -455,14 +481,15 @@
         <button class="link" onclick={() => changeView('jobs')}>All jobs</button><span>/</span><button class="link" onclick={() => changeView('collections')}>Collections</button><span>/</span><span>{selectedGroup.name}</span>
       </nav>
       <h3 class="text-lg font-semibold">{selectedGroup.name}</h3>
-      {#if selectedGroup.rows.find(row => row.job.collectionSourceUrl)?.job.collectionSourceUrl}
-        <a class="btn btn-sm btn-outline mt-2 gap-1.5 text-xs" href={selectedGroup.rows.find(row => row.job.collectionSourceUrl)!.job.collectionSourceUrl!} target="_blank" rel="noopener noreferrer"><ExternalLink class="h-3.5 w-3.5" />View source</a>
+      {#if selectedGroup.sourceUrl}
+        <a class="btn btn-sm btn-outline mt-2 gap-1.5 text-xs" href={selectedGroup.sourceUrl} target="_blank" rel="noopener noreferrer"><ExternalLink class="h-3.5 w-3.5" />View source</a>
       {/if}
       <p class="mt-1 text-xs text-base-content/55">{selectedGroup.rows.length} jobs · {selectedGroup.done} complete · {selectedGroup.active} active · {selectedGroup.queued} queued · {selectedGroup.failed} failed</p>
       <div class="my-3 flex flex-wrap gap-2">
-        <button class="btn btn-sm btn-primary text-xs" onclick={() => stopDownloadGroup(selectedGroup!.rows[0])} disabled={Boolean(actionBusy[selectedGroup.rows[0].job.jobId]) || !(selectedGroup.active + selectedGroup.queued)}>Stop group</button>
-        <button class="btn btn-sm btn-primary text-xs" onclick={() => startDownloadGroup(selectedGroup!.rows[0])} disabled={Boolean(actionBusy[selectedGroup.rows[0].job.jobId])}>Retry failed / stopped</button>
+        <button class="btn btn-sm btn-primary text-xs" onclick={() => stopDownloadGroup(selectedGroup!.id)} disabled={Boolean(actionBusy[selectedGroup.id]) || !(selectedGroup.active + selectedGroup.queued || selectedGroup.status === 'Queued' || selectedGroup.status === 'Expanding')}>Stop group</button>
+        <button class="btn btn-sm btn-primary text-xs" onclick={() => startDownloadGroup(selectedGroup!.id)} disabled={Boolean(actionBusy[selectedGroup.id]) || !selectedGroup.rows.length}>Retry failed / stopped</button>
       </div>
+      {#if !selectedGroup.rows.length}<p class="mb-3 text-sm text-base-content/60">{selectedGroup.status === 'Queued' ? 'Waiting for worker before discovery starts.' : 'Discovering collection items…'}</p>{/if}
       <progress class="progress progress-success mb-3 h-1 w-full" value={selectedGroup.done} max={selectedGroup.rows.length} aria-label="Completed jobs in collection"></progress>
     {:else if view === 'collections'}
       <h3 class="text-lg font-semibold">Collections</h3>
@@ -499,7 +526,19 @@
       </div>
     {/if}
     {#if queueState.error || actionError}<div class="alert alert-error my-4 text-sm" role="alert"><CircleAlert class="h-4 w-4" /><span>{actionError ?? queueState.error}</span></div>{/if}
-    {#if collectionsLoading || (queueState.loading && !queueState.rows.length)}
+    {#if view === 'jobs' && !selectedCollection && holdingCollectionCards.length}
+      <div class="mb-4 space-y-2" aria-label="Queued collections">
+        {#each holdingCollectionCards as group (group.groupId)}
+          <article class="card border border-base-300 bg-base-100 p-3.5">
+            <div class="flex items-center gap-2"><Folder class="h-4 w-4 text-base-content/50" /><span class="badge badge-sm badge-ghost">{group.kind}</span><span class="badge badge-sm">{group.status}</span></div>
+            <p class="mt-2 break-all text-sm font-medium">{group.sourceUrl}</p>
+            <p class="mt-1 text-xs text-base-content/60">{group.status === 'Queued' ? 'Waiting for worker before discovery starts' : 'Discovering collection items'}</p>
+            <button class="btn btn-sm btn-accent mt-3 w-fit text-xs" onclick={() => openCollection(group.correlationId)}>Open collection</button>
+          </article>
+        {/each}
+      </div>
+    {/if}
+    {#if (collectionsLoading && !collections.length) || (queueState.loading && !queueState.rows.length && view === 'jobs' && !selectedCollection)}
       <div class="flex justify-center py-16" role="status" aria-label="Loading jobs"><span class="loading loading-spinner loading-md"></span></div>
     {:else if view === 'collections'}
       <div class="space-y-2">
@@ -508,15 +547,16 @@
             <div class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50"><Folder class="h-4 w-4" /></div>
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2"><button class="link text-left text-sm font-semibold text-primary" onclick={() => openCollection(group.id)}>{group.name}</button><span class="badge badge-sm badge-ghost rounded text-[11px]">{group.kind}</span></div>
-              <p class="mt-1 text-xs text-base-content/55">{new Date(group.rows[0].job.createdAt).toLocaleString()}</p>
-              <p class="my-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60"><span>{group.rows.length} jobs</span><span>{group.done} complete</span><span>{group.active} active</span><span>{group.queued} queued</span><span>{group.failed} failed</span></p>
+              <p class="mt-1 text-xs text-base-content/55">{group.createdAt ? new Date(group.createdAt).toLocaleString() : ''}</p>
+              {#if !group.rows.length}<p class="my-3 text-xs text-base-content/60">{group.status === 'Queued' ? 'Waiting for worker before discovery starts' : 'Discovering collection items'}</p>
+              {:else}<p class="my-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60"><span>{group.rows.length} jobs</span><span>{group.done} complete</span><span>{group.active} active</span><span>{group.queued} queued</span><span>{group.failed} failed</span></p>{/if}
               <progress class="progress progress-success block h-1 w-full" value={group.done} max={group.rows.length} aria-label="Completed jobs"></progress>
               <button class="btn btn-sm btn-accent mt-2 text-xs" onclick={() => openCollection(group.id)}>Open collection <ChevronRight class="h-3.5 w-3.5" /></button>
             </div>
           </article>
         {:else}<p class="py-10 text-center text-sm text-base-content/60">No collections match this view.</p>{/each}
       </div>
-    {:else if visibleRows.length === 0}
+    {:else if visibleRows.length === 0 && holdingCollectionCards.length === 0}
       <div class="py-10 text-center"><Server class="mx-auto h-8 w-8 text-base-content/30" /><p class="mt-4 text-sm font-semibold">No jobs match this view</p><p class="mt-1 text-xs text-base-content/50">Queue a download or change the filters.</p></div>
     {:else}
       <div class="space-y-2">

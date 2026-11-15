@@ -49,7 +49,7 @@ public sealed class DownloadFlowV2Repository(
             autoStart = false;
 
         var now = clock.GetCurrentInstant();
-        var status = autoStart ? DownloadJobStatus.Running : DownloadJobStatus.Stopped;
+        var status = autoStart ? DownloadJobStatus.Queued : DownloadJobStatus.Stopped;
         var runId = autoStart ? Guid.NewGuid() : (Guid?)null;
         var runNumber = autoStart ? (existingJob?.CurrentRunNumber ?? 0) + 1 : existingJob?.CurrentRunNumber ?? 0;
 
@@ -86,6 +86,7 @@ public sealed class DownloadFlowV2Repository(
         job.Stage = autoStart ? DownloadStage.Metadata : DownloadStage.None;
         job.StageStatus = autoStart ? DownloadStageStatus.Pending : DownloadStageStatus.Stopped;
         job.CurrentRunId = runId;
+        job.AssignedWorkerId = null;
         job.CurrentRunNumber = runNumber;
         job.CurrentAttempt = 0;
         job.CurrentArtifactKey = null;
@@ -112,10 +113,10 @@ public sealed class DownloadFlowV2Repository(
                 RunId = id,
                 JobId = request.JobId,
                 RunNumber = runNumber,
-                Status = DownloadJobStatus.Running,
+                Status = status,
                 Stage = DownloadStage.Metadata,
                 StageStatus = DownloadStageStatus.Pending,
-                StartedAt = now,
+                StartedAt = null,
                 UpdatedAt = now
             });
         }
@@ -178,10 +179,11 @@ public sealed class DownloadFlowV2Repository(
         var now = clock.GetCurrentInstant();
         var runId = Guid.NewGuid();
         var runNumber = job.CurrentRunNumber + 1;
-        job.Status = DownloadJobStatus.Running;
+        job.Status = DownloadJobStatus.Queued;
         job.Stage = DownloadStage.Metadata;
         job.StageStatus = DownloadStageStatus.Pending;
         job.CurrentRunId = runId;
+        job.AssignedWorkerId = null;
         job.CurrentRunNumber = runNumber;
         job.CurrentAttempt = 0;
         job.CurrentArtifactKey = null;
@@ -201,7 +203,7 @@ public sealed class DownloadFlowV2Repository(
         job.InfoJsonSizeBytes = null;
         job.MetaStoragePath = null;
         job.CompletedAt = null;
-        job.State = DownloadJobState.MetadataPending;
+        job.State = LegacyState(job.Status, job.Stage, job.StageStatus);
         job.UpdatedAt = now;
 
         db.DownloadJobRuns.Add(new DownloadJobRunEntity
@@ -209,10 +211,10 @@ public sealed class DownloadFlowV2Repository(
             RunId = runId,
             JobId = jobId,
             RunNumber = runNumber,
-            Status = DownloadJobStatus.Running,
+            Status = DownloadJobStatus.Queued,
             Stage = DownloadStage.Metadata,
             StageStatus = DownloadStageStatus.Pending,
-            StartedAt = now,
+            StartedAt = null,
             UpdatedAt = now
         });
 
@@ -261,7 +263,8 @@ public sealed class DownloadFlowV2Repository(
             return new DownloadControlDecision(true, true, jobId, job.CurrentRunId, job.CorrelationId, job.Status, null, null);
 
         var previous = job.Status;
-        var immediate = job.Status == DownloadJobStatus.Queued || job.CurrentRunId is null;
+        // A queued run has a durable command waiting for a worker. Its result must drain the flow.
+        var immediate = job.CurrentRunId is null;
         job.Status = immediate ? DownloadJobStatus.Stopped : DownloadJobStatus.Stopping;
         job.StageStatus = immediate ? DownloadStageStatus.Stopped : job.StageStatus;
         job.FailureKind = FailureKind.Stopped;
@@ -451,7 +454,7 @@ public sealed class DownloadFlowV2Repository(
         if (job is null || job.Status is DownloadJobStatus.Failed or DownloadJobStatus.Stopped
             or DownloadJobStatus.Completed or DownloadJobStatus.CompletedWithWarnings or DownloadJobStatus.AlreadyDownloaded
             || job.CurrentRunId != runId
-            || (job.StopRequestedAt is not null && status == DownloadJobStatus.Running))
+            || (job.StopRequestedAt is not null && status is DownloadJobStatus.Running or DownloadJobStatus.Queued))
             return false;
 
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == runId && x.JobId == jobId, ct);
@@ -462,6 +465,8 @@ public sealed class DownloadFlowV2Repository(
         var now = clock.GetCurrentInstant();
         job.Status = status;
         job.Stage = stage;
+        if (status == DownloadJobStatus.Queued && stage == DownloadStage.WaitingForWorker)
+            job.AssignedWorkerId = null;
         job.StageStatus = stageStatus;
         job.CurrentAttempt = attempt;
         job.CurrentArtifactKey = NormalizeArtifactKey(artifactKey) is { Length: > 0 } key ? key : null;
@@ -888,7 +893,7 @@ public sealed class DownloadFlowV2Repository(
             || attempt.RunId != execution.RunId || attempt.JobId != execution.JobId || attempt.Stage != execution.Stage
             || attempt.Attempt != execution.Attempt || attempt.ArtifactKey != NormalizeArtifactKey(execution.ArtifactKey)
             || attempt.Status is not (DownloadStageStatus.Pending or DownloadStageStatus.Running)
-            || job.Status is not (DownloadJobStatus.Running or DownloadJobStatus.Compensating
+            || job.Status is not (DownloadJobStatus.Queued or DownloadJobStatus.Running or DownloadJobStatus.Compensating
                 or DownloadJobStatus.Stopping)
             || job.Stage != execution.Stage
             || job.CurrentAttempt != execution.Attempt
@@ -912,6 +917,31 @@ public sealed class DownloadFlowV2Repository(
         }
 
         var now = clock.GetCurrentInstant();
+        if (job.StopRequestedAt is null && execution.Stage is not (DownloadStage.Cleanup or DownloadStage.Compensation))
+        {
+            // Lock one capacity row before counting assignments. Concurrent claims for the same
+            // worker then cannot both pass the final free slot.
+            await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql(
+                "DownloadFlowV2Repository.LockWorkerCapacityAsync.1", request.WorkerInstanceId), ct);
+            await db.Database.ExecuteSqlInterpolatedAsync(db.ParameterizedSql(
+                "DownloadFlowV2Repository.LockWorkerCapacityAsync.2", request.WorkerInstanceId), ct);
+            var capacity = await db.WorkerCapacities.AsNoTracking()
+                .Where(x => x.WorkerId == request.WorkerInstanceId)
+                .Select(x => x.MaxActiveJobs).SingleAsync(ct);
+            if (await db.DownloadWorkerLeases.AsNoTracking().AnyAsync(x => x.JobId == job.JobId
+                    && x.Status == DownloadWorkerLeaseStatus.Active && x.ExpiresAt > now, ct))
+                return new AcquireDownloadLeaseResponse { Granted = false, RejectionCode = "job_worker_busy" };
+            var activeJobs = await db.DownloadWorkerLeases.AsNoTracking()
+                .Where(x => x.WorkerInstanceId == request.WorkerInstanceId
+                    && x.Status == DownloadWorkerLeaseStatus.Active && x.ExpiresAt > now)
+                .Select(x => x.JobId).Distinct().CountAsync(ct);
+            var activeCollections = await db.CollectionWorkerLeases.AsNoTracking()
+                .CountAsync(x => x.WorkerId == request.WorkerInstanceId
+                    && x.ReleasedAt == null && x.ExpiresAt > now, ct);
+            if (activeJobs + activeCollections >= capacity)
+                return new AcquireDownloadLeaseResponse { Granted = false, RejectionCode = "worker_capacity_full" };
+            job.AssignedWorkerId = request.WorkerInstanceId;
+        }
         var expires = now + LeaseDuration;
         db.DownloadWorkerLeases.Add(new DownloadWorkerLeaseEntity
         {
@@ -930,16 +960,27 @@ public sealed class DownloadFlowV2Repository(
         attempt.Status = DownloadStageStatus.Running;
         attempt.StartedAt = now;
         attempt.UpdatedAt = now;
+        var previousStatus = job.Status;
+        if (job.Status == DownloadJobStatus.Queued)
+        {
+            job.Status = DownloadJobStatus.Running;
+            job.State = LegacyState(job.Status, job.Stage, DownloadStageStatus.Running);
+        }
         job.StageStatus = DownloadStageStatus.Running;
         job.UpdatedAt = now;
         var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == execution.RunId, ct);
         if (run is not null)
         {
+            if (run.Status == DownloadJobStatus.Queued)
+            {
+                run.Status = DownloadJobStatus.Running;
+                run.StartedAt = now;
+            }
             run.StageStatus = DownloadStageStatus.Running;
             run.UpdatedAt = now;
         }
         await db.SaveChangesAsync(ct);
-        await NotifyAsync(job, job.Status, ct);
+        await NotifyAsync(job, previousStatus, ct);
         return new AcquireDownloadLeaseResponse
         {
             Granted = true,
@@ -1265,7 +1306,8 @@ public sealed class DownloadFlowV2Repository(
         group.FailedJobs = children.Count(x => x.Status == DownloadJobStatus.Failed);
         var terminalCount = statuses.Count(x => x is DownloadJobStatus.Completed or DownloadJobStatus.CompletedWithWarnings
             or DownloadJobStatus.AlreadyDownloaded or DownloadJobStatus.Ignored or DownloadJobStatus.Failed or DownloadJobStatus.Stopped);
-        if (!interrupted && children.Count > 0 && terminalCount == children.Count)
+        if (!interrupted && group.Status != DownloadGroupStatus.Expanding
+            && children.Count > 0 && terminalCount == children.Count)
         {
             group.Status = stopInProgress && statuses.Any(x => x == DownloadJobStatus.Stopped)
                 ? DownloadGroupStatus.Stopped
@@ -1275,7 +1317,8 @@ public sealed class DownloadFlowV2Repository(
                 : DownloadGroupStatus.Completed;
             group.CompletedAt = clock.GetCurrentInstant();
         }
-        else if (children.Count > 0 && terminalCount < children.Count && !stopInProgress)
+        else if (group.Status != DownloadGroupStatus.Expanding
+            && children.Count > 0 && terminalCount < children.Count && !stopInProgress)
         {
             group.Status = DownloadGroupStatus.Running;
             group.CompletedAt = null;
@@ -1318,13 +1361,24 @@ public sealed class DownloadFlowV2Repository(
         foreach (var job in queued.Where(x => ProviderMatchesSource(provider, x.SourceUrl)))
         {
             var previous = job.Status;
-            job.Status = DownloadJobStatus.Stopped;
-            job.StageStatus = DownloadStageStatus.Stopped;
-            job.State = DownloadJobState.Cancelled;
+            var hasRun = job.CurrentRunId is not null;
+            job.Status = hasRun ? DownloadJobStatus.Stopping : DownloadJobStatus.Stopped;
+            job.StageStatus = hasRun ? job.StageStatus : DownloadStageStatus.Stopped;
+            job.State = hasRun ? DownloadJobState.Cancelling : DownloadJobState.Cancelled;
             job.FailureKind = FailureKind.ProviderBlocked;
             job.FailureCode = "provider_circuit_open";
             job.FailureMessage = $"The provider circuit for '{provider}' is open. {reason}";
             job.UpdatedAt = clock.GetCurrentInstant();
+            if (hasRun)
+            {
+                job.StopRequestedAt = job.UpdatedAt;
+                var run = await db.DownloadJobRuns.FirstOrDefaultAsync(x => x.RunId == job.CurrentRunId, ct);
+                if (run is not null)
+                {
+                    run.Status = DownloadJobStatus.Stopping;
+                    run.UpdatedAt = job.UpdatedAt;
+                }
+            }
             await db.SaveChangesAsync(ct);
             await NotifyAsync(job, previous, ct);
             await RefreshGroupAggregateAsync(job.CorrelationId, ct);
@@ -1429,7 +1483,7 @@ public sealed class DownloadFlowV2Repository(
         Guid jobId, Guid runId, DownloadStage stage, CancellationToken ct)
         => db.DownloadJobs.AsNoTracking()
             .Where(x => x.JobId == jobId && x.CurrentRunId == runId
-                        && (x.Status == DownloadJobStatus.Running || x.Status == DownloadJobStatus.Compensating
+                        && (x.Status == DownloadJobStatus.Queued || x.Status == DownloadJobStatus.Running || x.Status == DownloadJobStatus.Compensating
                             || (x.Status == DownloadJobStatus.Stopping
                                 && (stage == DownloadStage.Cleanup || stage == DownloadStage.Compensation))))
             .Select(x => (DownloadJobStatus?)x.Status)

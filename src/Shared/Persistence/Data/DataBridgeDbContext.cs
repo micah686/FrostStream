@@ -14,6 +14,8 @@ public sealed class DataBridgeDbContext(DbContextOptions<DataBridgeDbContext> op
     public DbSet<StorageGoogleCloudStorageObjectConfigEntity> StorageGoogleCloudStorageObjectConfigs => Set<StorageGoogleCloudStorageObjectConfigEntity>();
 
     public DbSet<DownloadJobEntity> DownloadJobs => Set<DownloadJobEntity>();
+    public DbSet<WorkerCapacityEntity> WorkerCapacities => Set<WorkerCapacityEntity>();
+    public DbSet<CollectionWorkerLeaseEntity> CollectionWorkerLeases => Set<CollectionWorkerLeaseEntity>();
     public DbSet<DownloadGroupEntity> DownloadGroups => Set<DownloadGroupEntity>();
     public DbSet<DownloadJobRunEntity> DownloadJobRuns => Set<DownloadJobRunEntity>();
     public DbSet<DownloadStageAttemptEntity> DownloadStageAttempts => Set<DownloadStageAttemptEntity>();

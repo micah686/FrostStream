@@ -64,11 +64,24 @@ public sealed class YtDlpClientTests
             entries.Add(entry);
         }
 
-        Assert.Equal(["--dump-json", "--yes-playlist", "--ignore-no-formats-error", VimeoUrl], factory.SingleStartInfo.Arguments);
+        Assert.Equal(["--dump-json", "--yes-playlist", "--flat-playlist", "--ignore-no-formats-error", VimeoUrl], factory.SingleStartInfo.Arguments);
         Assert.Collection(
             entries,
             first => Assert.Equal("First clip", first.Title),
             second => Assert.Equal("Second clip", second.Title));
+    }
+
+    [Fact]
+    public async Task GetVideoInfoAsync_FlatListing_DoesNotResolveIndividualVideos()
+    {
+        var factory = new FakeProcessFactory(new FakeYtDlpProcess(
+            ["""{"id":"playlist","entries":[{"id":"one","title":"First clip"}]}"""]));
+        var client = CreateClient(factory);
+
+        var info = await client.GetVideoInfoAsync(VimeoUrl, flat: true);
+
+        Assert.Equal(["--dump-single-json", "--yes-playlist", "--flat-playlist", VimeoUrl], factory.SingleStartInfo.Arguments);
+        Assert.Equal("First clip", Assert.Single(info.Entries!).Title);
     }
 
     [Fact]

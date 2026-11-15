@@ -12,7 +12,8 @@ export async function adminApi(page: Page, handler?: (route: Route, url: URL) =>
     let body: unknown;
     if (path === '/api/storage/list') body = [storage];
     else if (path === '/api/storage/archive') body = storage;
-    else if (path === '/api/admin/workers') body = { workers: [{ workerId: 'worker-1', name: 'Worker One', tags: ['gpu'], incomingRoot: '/incoming', lastOnline: '2025-01-01T00:00:00Z' }] };
+    else if (path === '/api/admin/workers') body = { workers: [{ workerId: 'worker-1', name: 'Worker One', tags: ['gpu'], incomingRoot: '/incoming', lastOnline: '2025-01-01T00:00:00Z', maxActiveJobs: 2, activeJobs: 1 }] };
+    else if (path === '/api/admin/workers/worker-1/capacity') body = { success: true };
     else if (path === '/api/global/schedules') body = [schedule];
     else if (path.startsWith('/api/global/access-control/')) body = [];
     else if (path === '/api/global/imports/sessions') body = session;

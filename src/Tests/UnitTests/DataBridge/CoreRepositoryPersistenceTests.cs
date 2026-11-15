@@ -245,7 +245,7 @@ public sealed class CoreRepositoryPersistenceTests
         (await flows.CreateInitialRunAsync(request, true)).ShouldBeNull();
         f.Db.ChangeTracker.Clear();
         var job = await f.Db.DownloadJobs.SingleAsync();
-        job.Status.ShouldBe(DownloadJobStatus.Running);
+        job.Status.ShouldBe(DownloadJobStatus.Queued);
         job.Stage.ShouldBe(DownloadStage.Metadata);
         job.UpdatedAt.ShouldBe(Timestamp);
         var history = await f.Db.DownloadJobHistory.SingleAsync();
@@ -256,6 +256,80 @@ public sealed class CoreRepositoryPersistenceTests
         (await jobs.QueryQueueAsync(new() { Query = "no_match%" })).Items.ShouldBeEmpty();
         // Ordinary transactional read/modify/write; racing mutations remain the 2d acceptance work.
         (await flows.StartFreshRunAsync(Guid.NewGuid())).ShouldBeNull();
+    });
+
+    [Test]
+    public Task Worker_Capacity_Blocks_Metadata_Until_The_First_Job_Finishes() => Both(async f =>
+    {
+        var flows = new DownloadFlowV2Repository(f.Db, new FixedClock(Timestamp), NullDownloadJobStateNotifier.Instance);
+        f.Db.WorkerCapacities.Add(new WorkerCapacityEntity { WorkerId = "worker", MaxActiveJobs = 1 });
+        await f.Db.SaveChangesAsync();
+        async Task<(DownloadRunRequest Run, DownloadExecutionIdentity Execution)> Queue(string suffix)
+        {
+            var request = new DownloadRequested { JobId = Guid.NewGuid(), CorrelationId = Guid.NewGuid(), MessageId = Guid.NewGuid(),
+                OperationKey = suffix, OccurredAt = Timestamp, SourceUrl = $"https://test/{suffix}", StorageKey = "default", RequestedBy = "tester" };
+            var run = (await flows.CreateInitialRunAsync(request, true)).ShouldNotBeNull();
+            var execution = new DownloadExecutionIdentity { JobId = request.JobId, RunId = run.RunId,
+                Stage = DownloadStage.Metadata, Attempt = 1, DispatchId = Guid.NewGuid(), CorrelationId = request.CorrelationId };
+            (await flows.BeginStageAttemptAsync(execution, suffix)).ShouldBeTrue();
+            return (run, execution);
+        }
+        var first = await Queue("first");
+        var second = await Queue("second");
+        (await flows.TryAcquireLeaseAsync(new() { Execution = first.Execution, WorkerInstanceId = "worker", OccurredAt = Timestamp })).Granted.ShouldBeTrue();
+        var blocked = await flows.TryAcquireLeaseAsync(new() { Execution = second.Execution, WorkerInstanceId = "worker", OccurredAt = Timestamp });
+        blocked.Granted.ShouldBeFalse();
+        blocked.RejectionCode.ShouldBe("worker_capacity_full");
+        var waiting = await f.Db.DownloadJobs.AsNoTracking().SingleAsync(x => x.JobId == second.Run.Request.JobId);
+        waiting.Status.ShouldBe(DownloadJobStatus.Queued);
+        waiting.AssignedWorkerId.ShouldBeNull();
+        await flows.ReleaseLeaseAsync(first.Execution.DispatchId, DownloadWorkerLeaseStatus.Released);
+        (await flows.CompleteRunAsync(first.Run.Request.JobId, first.Run.RunId, false)).ShouldBeTrue();
+        (await flows.TryAcquireLeaseAsync(new() { Execution = second.Execution, WorkerInstanceId = "worker", OccurredAt = Timestamp })).Granted.ShouldBeTrue();
+    });
+
+    [Test]
+    public Task Collection_Discovery_Waits_For_A_Worker_Slot_Before_Expanding() => Both(async f =>
+    {
+        var groupId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid();
+        f.Db.WorkerCapacities.Add(new WorkerCapacityEntity { WorkerId = "worker", MaxActiveJobs = 1 });
+        f.Db.DownloadGroups.Add(new DownloadGroupEntity { GroupId = groupId, CorrelationId = correlationId,
+            Kind = DownloadGroupKind.Playlist, Status = DownloadGroupStatus.Queued,
+            SourceUrl = "https://test/playlist" });
+        await f.Db.SaveChangesAsync();
+        var flows = new DownloadFlowV2Repository(f.Db, new FixedClock(Timestamp), NullDownloadJobStateNotifier.Instance);
+        var request = new DownloadRequested { JobId = Guid.NewGuid(), CorrelationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(), OperationKey = "occupy", OccurredAt = Timestamp,
+            SourceUrl = "https://test/video", StorageKey = "default", RequestedBy = "tester" };
+        var run = (await flows.CreateInitialRunAsync(request, true)).ShouldNotBeNull();
+        var execution = new DownloadExecutionIdentity { JobId = request.JobId, RunId = run.RunId,
+            Stage = DownloadStage.Metadata, Attempt = 1, DispatchId = Guid.NewGuid(), CorrelationId = request.CorrelationId };
+        (await flows.BeginStageAttemptAsync(execution, "occupy")).ShouldBeTrue();
+        (await flows.TryAcquireLeaseAsync(new() { Execution = execution, WorkerInstanceId = "worker", OccurredAt = Timestamp })).Granted.ShouldBeTrue();
+        var registry = new WorkerRegistryConsumerService(Substitute.For<IMessageBus>(), f.ScopeFactory,
+            new FixedClock(Timestamp));
+        var collectionRequest = new CollectionCapacityRequest
+        { DispatchId = Guid.NewGuid(), GroupId = groupId, WorkerId = "worker" };
+        var waiting = await registry.AcquireCollectionAsync(collectionRequest);
+        waiting.Granted.ShouldBeFalse();
+        (await f.Db.DownloadGroups.AsNoTracking().SingleAsync(x => x.GroupId == groupId)).Status
+            .ShouldBe(DownloadGroupStatus.Queued);
+        await flows.ReleaseLeaseAsync(execution.DispatchId, DownloadWorkerLeaseStatus.Released);
+        (await registry.AcquireCollectionAsync(collectionRequest)).Granted.ShouldBeTrue();
+        (await f.Db.DownloadGroups.AsNoTracking().SingleAsync(x => x.GroupId == groupId)).Status
+            .ShouldBe(DownloadGroupStatus.Expanding);
+        (await f.Db.CollectionWorkerLeases.AsNoTracking().SingleAsync(x => x.DispatchId == collectionRequest.DispatchId))
+            .ReleasedAt.ShouldBeNull();
+        await f.Db.CollectionWorkerLeases.Where(x => x.DispatchId == collectionRequest.DispatchId)
+            .ExecuteUpdateAsync(x => x.SetProperty(lease => lease.ReleasedAt, Timestamp));
+        (await registry.AcquireCollectionAsync(collectionRequest)).Granted.ShouldBeTrue();
+        (await f.Db.CollectionWorkerLeases.AsNoTracking().SingleAsync(x => x.DispatchId == collectionRequest.DispatchId))
+            .ReleasedAt.ShouldBeNull();
+        await flows.SetGroupStatusAsync(groupId, DownloadGroupStatus.Stopped);
+        var stopped = await registry.AcquireCollectionAsync(new CollectionCapacityRequest
+        { DispatchId = Guid.NewGuid(), GroupId = groupId, WorkerId = "worker" });
+        stopped.Stale.ShouldBeTrue();
     });
 
     [Test]

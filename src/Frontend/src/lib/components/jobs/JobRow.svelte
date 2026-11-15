@@ -264,6 +264,9 @@
   }
 
   function displayStage(r: QueueRow): string {
+    if (isQueued(r.job.status) && r.job.stage === 'None') return 'Queued · preparing';
+    if (isQueued(r.job.status) && r.job.stage === 'Metadata') return 'Waiting for worker · metadata';
+    if (isQueued(r.job.status) && r.job.stage === 'WaitingForWorker') return 'Waiting for worker · download';
     const stage = humanizeDownloadName(r.job.stage);
     const state = humanizeDownloadName(r.job.stageStatus);
     if (normalizeStatus(r.job.stageStatus) === 'retrywaiting') {
@@ -445,7 +448,7 @@
       </div>
       <button class="mt-3 flex max-w-full items-center gap-1.5 text-left text-xs text-base-content/60 hover:text-base-content" onclick={toggleExpanded} aria-expanded={expanded} aria-controls={`job-details-${job.jobId}`}>
         <ListChecks class="h-3.5 w-3.5 shrink-0" />
-        <span>{isQueued(job.status) ? 'Workflow not started' : isDone(job.status) ? 'Workflow finished' : `Workflow · ${displayStage(row)}`}</span>
+        <span>{isDone(job.status) ? 'Workflow finished' : `Workflow · ${displayStage(row)}`}</span>
         <ChevronDown class={['h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none', expanded && 'rotate-180']} />
       </button>
     </div>

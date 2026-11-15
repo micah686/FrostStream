@@ -308,7 +308,7 @@ public sealed class BulkContentionPersistenceTests
         var survivor = await f.Db.DownloadJobs.AsNoTracking().SingleOrDefaultAsync();
         if (survivor is not null)
         {
-            survivor.Status.ShouldBe(DownloadJobStatus.Running);
+            survivor.Status.ShouldBe(DownloadJobStatus.Queued);
             (await f.Db.DownloadJobRuns.CountAsync()).ShouldBe(1);
         }
         else
@@ -412,8 +412,8 @@ public sealed class BulkContentionPersistenceTests
         var job = await f.Db.DownloadJobs.AsNoTracking().SingleAsync();
         job.StopRequestedAt.ShouldBeNull();
         job.WarningCount.ShouldBe(0);
-        job.Status.ShouldBe(DownloadJobStatus.Running);
-        (await f.Db.DownloadJobRuns.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Running);
+        job.Status.ShouldBe(DownloadJobStatus.Queued);
+        (await f.Db.DownloadJobRuns.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Queued);
     });
 
     [Test]
@@ -479,7 +479,7 @@ public sealed class BulkContentionPersistenceTests
         await new DownloadFlowV2Repository(f.Db, new FixedClock(Now + Duration.FromSeconds(100)), NullDownloadJobStateNotifier.Instance).FailExpiredLeasesAsync();
         var job = await f.Db.DownloadJobs.AsNoTracking().SingleAsync();
         job.CurrentRunId.ShouldBe(fresh.RunId);
-        job.Status.ShouldBe(DownloadJobStatus.Running);
+        job.Status.ShouldBe(DownloadJobStatus.Queued);
         job.WarningCount.ShouldBe(0);
     });
 

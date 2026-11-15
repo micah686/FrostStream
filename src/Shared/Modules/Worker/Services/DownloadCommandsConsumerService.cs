@@ -44,6 +44,7 @@ public sealed class DownloadCommandsConsumerService(
     ISecretStore secretStore,
     IClock clock,
     IOptions<WorkerOptions> workerOptions,
+    WorkerInstanceIdentity identity,
     PotOptionsApplier potOptionsApplier,
     IReturnYouTubeDislikeClient returnYouTubeDislikeClient,
     LiveChatSidecarProcessor liveChatSidecarProcessor,
@@ -63,7 +64,7 @@ public sealed class DownloadCommandsConsumerService(
     private static readonly TimeSpan LeaseHeartbeatInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LeaseRequestTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan LeaseAcquireRetryDelay = TimeSpan.FromSeconds(5);
-    private readonly string _workerInstanceId = $"{Environment.MachineName}-{Guid.NewGuid():N}";
+    private readonly string _workerInstanceId = identity.Id;
     private readonly ConcurrentDictionary<Guid, ActiveExecution> _activeExecutions = new();
     private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _pendingRunCancellations = new();
     private readonly ConcurrentDictionary<(Guid JobId, Guid RunId), DateTimeOffset> _userStopRequests = new();

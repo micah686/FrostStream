@@ -30,10 +30,9 @@ public sealed class DownloadGroupV2Flow(
 
     public override async Task Run(DownloadGroupRequested request)
     {
-        await Capture(() => V2(r => r.SetGroupStatusAsync(request.GroupId, DownloadGroupStatus.Expanding)));
-
         if (request.Kind == DownloadGroupKind.Direct)
         {
+            await Capture(() => V2(r => r.SetGroupStatusAsync(request.GroupId, DownloadGroupStatus.Expanding)));
             await RunDirectAsync(request);
             return;
         }
@@ -85,11 +84,13 @@ public sealed class DownloadGroupV2Flow(
             }
             if (result.HasFirst)
             {
-                await Capture(() => V2(r => r.RefreshGroupAggregateAsync(group.CorrelationId)));
                 if (result.First.ExpectedJobs == 0)
                     await Capture(() => V2(r => r.SetGroupStatusAsync(group.GroupId, DownloadGroupStatus.Completed)));
                 else
+                {
                     await Capture(() => V2(r => r.SetGroupStatusAsync(group.GroupId, DownloadGroupStatus.Running)));
+                    await Capture(() => V2(r => r.RefreshGroupAggregateAsync(group.CorrelationId)));
+                }
                 return;
             }
 
@@ -209,6 +210,7 @@ public sealed class DownloadGroupV2Flow(
                 messageId: child.MessageId.ToString("N")));
         }
 
+        await Capture(() => V2(r => r.SetGroupStatusAsync(group.GroupId, DownloadGroupStatus.Running)));
         await Capture(() => V2(r => r.RefreshGroupAggregateAsync(group.CorrelationId)));
         if (entries.Count == 0)
             await Capture(() => V2(r => r.SetGroupStatusAsync(group.GroupId, DownloadGroupStatus.Completed)));
@@ -234,6 +236,7 @@ public sealed class DownloadGroupV2Flow(
             var command = new FetchPlaylistMetadataCommand
             {
                 PlaylistId = playlistId,
+                GroupId = group.GroupId,
                 CorrelationId = group.CorrelationId,
                 CausationId = group.MessageId,
                 MessageId = dispatchId,

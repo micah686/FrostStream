@@ -41,6 +41,26 @@ export type DownloadStageStatus =
 export type DownloadJobState = string;
 export type DownloadSourceKind = string;
 
+export interface DownloadCollection {
+  groupId: string;
+  correlationId: string;
+  kind: 'Playlist' | 'Channel' | 'CreatorMonitor';
+  status: 'Queued' | 'Expanding' | 'Running' | 'Stopping' | 'Stopped' | 'Completed' | 'CompletedWithWarnings' | 'CompletedWithFailures' | 'Failed';
+  sourceUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  totalJobs: number;
+  completedJobs: number;
+  failedJobs: number;
+}
+
+export async function fetchCollections(fetchImpl: typeof fetch = fetch): Promise<DownloadCollection[]> {
+  const response = await fetchImpl('/api/downloads/queue/collections', { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`Could not load collections (${response.status}).`);
+  const payload = await response.json() as { items?: DownloadCollection[] };
+  return payload.items ?? [];
+}
+
 export interface DownloadQueueJob {
   jobId: string;
   correlationId: string;

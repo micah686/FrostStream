@@ -48,6 +48,17 @@ public sealed class DownloadQueueController(
 
     // ── Read surface ─────────────────────────────────────────────────────────────────
 
+    [HttpGet("collections")]
+    [Endpoint(EndpointIds.DownloadsCollectionsList)]
+    [EndpointSummary("List collection download groups")]
+    [EndpointDescription("Returns playlist and creator collection groups, including groups waiting for a worker before discovery begins.")]
+    public async Task<ActionResult<DownloadCollectionListResponse>> Collections(CancellationToken cancellationToken)
+    {
+        var response = await SendQueryAsync<DownloadCollectionListRequest, DownloadCollectionListResponse>(
+            DownloadQueueSubjects.Collections, new DownloadCollectionListRequest(), cancellationToken);
+        return response is null ? BadGateway() : Ok(response);
+    }
+
     [HttpGet]
     [Endpoint(EndpointIds.DownloadsQueueList)]
     [EndpointSummary("List the download queue / history")]

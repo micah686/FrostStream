@@ -3,6 +3,21 @@ using Shared.Messaging;
 
 namespace Shared.Database;
 
+public class WorkerCapacityEntity
+{
+    public required string WorkerId { get; set; }
+    public int MaxActiveJobs { get; set; } = 2;
+}
+
+public class CollectionWorkerLeaseEntity
+{
+    public Guid DispatchId { get; set; }
+    public string WorkerId { get; set; } = string.Empty;
+    public Guid? GroupId { get; set; }
+    public Instant ExpiresAt { get; set; }
+    public Instant? ReleasedAt { get; set; }
+}
+
 public class DownloadJobEntity
 {
     public Guid JobId { get; set; }
@@ -19,6 +34,9 @@ public class DownloadJobEntity
     public DownloadStageStatus StageStatus { get; set; } = DownloadStageStatus.Pending;
 
     public Guid? CurrentRunId { get; set; }
+
+    /// <summary>Worker holding this run's capacity slot, from metadata through settlement.</summary>
+    public string? AssignedWorkerId { get; set; }
 
     public int CurrentRunNumber { get; set; }
 

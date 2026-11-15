@@ -28,8 +28,7 @@ public sealed class PersistenceUpgradeTests
         {
             builder.Services.AddScoped<IApplicationSchemaInitializer>(sp => new SqliteSchemaInitializer(sp.GetRequiredService<SqliteConnectionFactory>(),sp.GetRequiredService<IClock>(),[]));
         });
-        var request=Request(); var repo=new DownloadFlowV2Repository(f.Db,new FixedClock(Now),NullDownloadJobStateNotifier.Instance);
-        var run=(await repo.CreateInitialRunAsync(request,true)).ShouldNotBeNull();
+        var request=Request();
         var store=await WorkflowPersistenceTests.Store(f);
         var type=await store.TypeStore.InsertOrGetStoredType(new("upgrade-workflow"));
         var id=new Cleipnir.ResilientFunctions.Storage.StoredId(type,Cleipnir.ResilientFunctions.Storage.StoredInstance.Create("instance"));
@@ -38,6 +37,8 @@ public sealed class PersistenceUpgradeTests
         using var scope=f.ScopeFactory.CreateScope();
         new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
         new SqliteSchemaInitializer(scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>(),new FixedClock(Now)).Initialize();
+        var repo=new DownloadFlowV2Repository(f.Db,new FixedClock(Now),NullDownloadJobStateNotifier.Instance);
+        var run=(await repo.CreateInitialRunAsync(request,true)).ShouldNotBeNull();
         (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).CurrentRunId.ShouldBe(run.RunId);
         (await f.Db.DownloadJobHistory.CountAsync()).ShouldBe(1);
         (await (await WorkflowPersistenceTests.Store(f)).GetFunction(id))!.Parameter.ShouldBe([1,2,3]);
@@ -45,7 +46,7 @@ public sealed class PersistenceUpgradeTests
         await using var connection=await f.Database.OpenConnectionAsync();
         await using var command=connection.CreateCommand();
         command.CommandText="SELECT MAX(version) FROM froststream_schema_versions";
-        Convert.ToInt64(await command.ExecuteScalarAsync()).ShouldBe(4L);
+        Convert.ToInt64(await command.ExecuteScalarAsync()).ShouldBe(6L);
         command.CommandText="SELECT enabled FROM scheduling_scheduled_tasks WHERE key='channel-scan-refresh'";
         Convert.ToBoolean(await command.ExecuteScalarAsync()).ShouldBeFalse();
     }
@@ -64,7 +65,7 @@ public sealed class PersistenceUpgradeTests
         var sql=SqliteSchemaMigrations.Rebuild("jobs_download_startup_state",["name","generation_started_at"],
             "CREATE TABLE jobs_download_startup_state_upgrade (name TEXT NOT NULL PRIMARY KEY,generation_started_at INTEGER NOT NULL CHECK(generation_started_at >= 0),note TEXT);",
             ["CREATE INDEX startup_generation_test ON jobs_download_startup_state(generation_started_at);"]);
-        var upgrade=new SqliteSchemaMigration(5,"test reviewed rebuild",sql,true);
+        var upgrade=new SqliteSchemaMigration(7,"test reviewed rebuild",sql,true);
         SqliteSchemaMigrations.Apply(connection,[..SqliteSchemaMigrations.All,upgrade],default);
         SqliteSchemaMigrations.Apply(connection,[..SqliteSchemaMigrations.All,upgrade],default);
         command.CommandText="SELECT generation_started_at FROM jobs_download_startup_state WHERE name='download'"; command.ExecuteScalar().ShouldBe(123L);
@@ -84,21 +85,21 @@ public sealed class PersistenceUpgradeTests
         await using var connection=(SqliteConnection)await f.Database.OpenConnectionAsync();
         using var command=connection.CreateCommand();
         command.CommandText="INSERT INTO jobs_download_startup_state VALUES('download',123)"; command.ExecuteNonQuery();
-        var bad=new SqliteSchemaMigration(5,"failed rebuild",SqliteSchemaMigrations.Rebuild("jobs_download_startup_state",["name","generation_started_at"],
+        var bad=new SqliteSchemaMigration(7,"failed rebuild",SqliteSchemaMigrations.Rebuild("jobs_download_startup_state",["name","generation_started_at"],
             "CREATE TABLE jobs_download_startup_state_upgrade (name TEXT NOT NULL PRIMARY KEY,generation_started_at INTEGER NOT NULL CHECK(generation_started_at > 200));",[]),true);
         Should.Throw<SqliteException>(()=>SqliteSchemaMigrations.Apply(connection,[..SqliteSchemaMigrations.All,bad],default));
         command.CommandText="SELECT generation_started_at FROM jobs_download_startup_state"; command.ExecuteScalar().ShouldBe(123L);
-        command.CommandText="SELECT MAX(version) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(4L);
+        command.CommandText="SELECT MAX(version) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(6L);
         command.CommandText="SELECT count(*) FROM sqlite_master WHERE name='jobs_download_startup_state_upgrade'"; command.ExecuteScalar().ShouldBe(0L);
         using var cancelled=new CancellationTokenSource();
         connection.CreateFunction("cancel_upgrade",()=> { cancelled.Cancel(); return 0; });
-        var cancel=new SqliteSchemaMigration(5,"cancelled upgrade","ALTER TABLE jobs_download_startup_state ADD COLUMN note TEXT; SELECT cancel_upgrade();");
+        var cancel=new SqliteSchemaMigration(7,"cancelled upgrade","ALTER TABLE jobs_download_startup_state ADD COLUMN note TEXT; SELECT cancel_upgrade();");
         Should.Throw<OperationCanceledException>(()=>SqliteSchemaMigrations.Apply(connection,[..SqliteSchemaMigrations.All,cancel],cancelled.Token));
         command.CommandText="SELECT count(*) FROM pragma_table_info('jobs_download_startup_state') WHERE name='note'"; command.ExecuteScalar().ShouldBe(0L);
         command.CommandText="PRAGMA foreign_keys"; command.ExecuteScalar().ShouldBe(1L);
-        var valid=new SqliteSchemaMigration(5,"retry upgrade","ALTER TABLE jobs_download_startup_state ADD COLUMN note TEXT;");
+        var valid=new SqliteSchemaMigration(7,"retry upgrade","ALTER TABLE jobs_download_startup_state ADD COLUMN note TEXT;");
         SqliteSchemaMigrations.Apply(connection,[..SqliteSchemaMigrations.All,valid],default);
-        command.CommandText="SELECT MAX(version) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(5L);
+        command.CommandText="SELECT MAX(version) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(7L);
     }
 
     [Test]
@@ -108,10 +109,10 @@ public sealed class PersistenceUpgradeTests
         var factory=scope.ServiceProvider.GetRequiredService<SqliteConnectionFactory>();
         await Task.WhenAll(Enumerable.Range(0,6).Select(_=>Task.Run(()=>new SqliteSchemaInitializer(factory,new FixedClock(Now)).Initialize())));
         using var connection=factory.OpenConnection(); using var command=connection.CreateCommand();
-        command.CommandText="SELECT count(*) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(4L);
+        command.CommandText="SELECT count(*) FROM froststream_schema_versions"; command.ExecuteScalar().ShouldBe(6L);
         command.CommandText="UPDATE froststream_schema_versions SET checksum='changed' WHERE version=2"; command.ExecuteNonQuery();
         Should.Throw<InvalidOperationException>(()=>new SqliteSchemaInitializer(factory,new FixedClock(Now)).Initialize());
-        command.CommandText="UPDATE froststream_schema_versions SET checksum=$checksum,version=5 WHERE version=2";
+        command.CommandText="UPDATE froststream_schema_versions SET checksum=$checksum,version=7 WHERE version=2";
         command.Parameters.AddWithValue("$checksum",SqliteSchemaMigrations.All[0].Checksum); command.ExecuteNonQuery();
         Should.Throw<InvalidOperationException>(()=>new SqliteSchemaInitializer(factory,new FixedClock(Now)).Initialize());
     }
