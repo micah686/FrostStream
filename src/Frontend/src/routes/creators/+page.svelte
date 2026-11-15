@@ -31,6 +31,7 @@
     type IgnoredMedia
   } from '#lib/api/creatorSources.js';
   import { listDownloadConfigSets, type DownloadConfigSet } from '#lib/api/downloadConfigSets.js';
+  import { listAccounts, type AccountSummary } from '#lib/api/accounts.js';
   import { formatRelativeDate } from '#lib/media.js';
   import ConfirmDeleteModal from '#lib/components/admin/ConfirmDeleteModal.svelte';
 
@@ -61,6 +62,7 @@
   }
 
   let sources = $state<CreatorSource[]>([]);
+  let accountNames = $state<Map<number, string>>(new Map());
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let actionError = $state<string | null>(null);
@@ -114,7 +116,12 @@
     loading = true;
     loadError = null;
     try {
-      sources = sortSources(await listCreatorSources());
+      const [creatorSources, accountResponse] = await Promise.all([
+        listCreatorSources(),
+        listAccounts({ pageSize: 1000 })
+      ]);
+      accountNames = new Map(accountResponse.items.map((account: AccountSummary) => [account.accountId, account.accountName]));
+      sources = sortSources(creatorSources);
     } catch (err) {
       loadError = err instanceof Error ? err.message : 'Could not load creator sources.';
     } finally {
@@ -371,6 +378,8 @@
   }
 
   function displayName(source: CreatorSource): string {
+    const accountName = source.accountId ? accountNames.get(source.accountId) : null;
+    if (accountName?.trim()) return accountName;
     try {
       const url = new URL(source.sourceUrl);
       const segments = url.pathname.split('/').filter(Boolean);
