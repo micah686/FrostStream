@@ -456,11 +456,20 @@ public sealed class ChannelDiscoveryConsumerService(
     private static YtDlpOptions? ChannelYtDlpOptions(ScheduledBackgroundRequest request)
         => request is ChannelScanFullRequested channelRequest ? channelRequest.YtDlpOptions : null;
 
-    private static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorMonitorDto source, VideoInfo container)
+    internal static IEnumerable<DiscoveredMediaCandidate> ExtractCandidates(CreatorMonitorDto source, VideoInfo container)
     {
         var entries = container.Entries ?? Array.Empty<VideoInfo>();
         foreach (var entry in entries)
         {
+            // Collections can contain other collections (tabs, seasons, albums, etc.).
+            // Only their media leaves belong in the download queue.
+            if (entry.Entries is not null || entry.Type is MetadataType.Playlist or MetadataType.MultiVideo)
+            {
+                foreach (var candidate in ExtractCandidates(source, entry))
+                    yield return candidate;
+                continue;
+            }
+
             var externalId = FirstNonBlank(entry.Id, entry.DisplayId);
             if (externalId is null)
             {
@@ -491,16 +500,9 @@ public sealed class ChannelDiscoveryConsumerService(
 
     internal static string? ResolveCanonicalUrl(CreatorMonitorDto source, VideoInfo entry, string externalId)
     {
-        // Flat YouTube collection entries occasionally report the collection URL in Url/WebpageUrl.
-        // The external id is the reliable per-video identity, so build the canonical watch URL first.
-        var extractor = FirstNonBlank(entry.Extractor, entry.ExtractorKey, source.Platform);
-        if (extractor?.Contains("youtube", StringComparison.OrdinalIgnoreCase) == true ||
-            source.Platform.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"https://www.youtube.com/watch?v={Uri.EscapeDataString(externalId)}";
-        }
-
-        var url = FirstIndividualAbsoluteUrl(source.SourceUrl, entry.WebpageUrl, entry.Url);
+        // Flat URL entries carry the extractor's media URL in Url; WebpageUrl can
+        // still refer to the enclosing collection. Never synthesize a URL from an id.
+        var url = FirstIndividualAbsoluteUrl(source.SourceUrl, entry.Url, entry.WebpageUrl);
         if (url is not null)
         {
             return url;

@@ -73,21 +73,104 @@ public sealed class ScanGuardTests
     }
 
     [Test]
-    public void Channel_Discovery_Uses_The_Entry_Id_For_YouTube_Instead_Of_A_Collection_Url()
+    public void Channel_Discovery_Uses_The_Extractor_Url_Instead_Of_A_Collection_Url()
     {
         var source = CreateSource(50) with
         {
-            SourceUrl = "https://www.youtube.com/@creator/videos"
+            Platform = "example",
+            SourceUrl = "https://example.test/creator"
         };
         var entry = new VideoInfo
         {
             Id = "video-id",
+            Url = "https://example.test/media/video-id",
             WebpageUrl = source.SourceUrl,
-            Extractor = "youtube"
+            Extractor = "example"
         };
 
         ChannelDiscoveryConsumerService.ResolveCanonicalUrl(source, entry, entry.Id)
-            .ShouldBe("https://www.youtube.com/watch?v=video-id");
+            .ShouldBe("https://example.test/media/video-id");
+    }
+
+    [Test]
+    public void Channel_Discovery_Expands_Nested_Collections_Into_Individual_Media()
+    {
+        var source = CreateSource(50) with { Platform = "example" };
+        var container = new VideoInfo
+        {
+            Type = MetadataType.Playlist,
+            Entries =
+            [
+                new VideoInfo
+                {
+                    Type = MetadataType.Playlist,
+                    Id = "creator-id",
+                    Title = "Creator - Videos",
+                    WebpageUrl = source.SourceUrl + "/videos",
+                    Extractor = "example:collection",
+                    Entries =
+                    [
+                        new VideoInfo
+                        {
+                            Type = MetadataType.Url,
+                            Id = "video-1",
+                            Title = "First video",
+                            Url = "https://example.test/watch/1"
+                        },
+                        new VideoInfo
+                        {
+                            Type = MetadataType.MultiVideo,
+                            Id = "album-id",
+                            Entries =
+                            [
+                                new VideoInfo
+                                {
+                                    Id = "video-2",
+                                    Title = "Second video",
+                                    WebpageUrl = "https://other.test/media/2",
+                                    Extractor = "other"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                new VideoInfo
+                {
+                    Id = "video-3",
+                    Url = "https://example.test/watch/3"
+                },
+                new VideoInfo
+                {
+                    Type = MetadataType.Playlist,
+                    Id = "empty-collection",
+                    WebpageUrl = source.SourceUrl + "/empty"
+                },
+                new VideoInfo
+                {
+                    Id = "untyped-empty-collection",
+                    WebpageUrl = source.SourceUrl + "/untyped",
+                    Entries = []
+                }
+            ]
+        };
+
+        var candidates = ChannelDiscoveryConsumerService.ExtractCandidates(source, container).ToArray();
+
+        candidates.Select(x => x.ExternalMediaId).ShouldBe(["video-1", "video-2", "video-3"]);
+        candidates.Select(x => x.CanonicalUrl).ShouldBe(
+            ["https://example.test/watch/1", "https://other.test/media/2", "https://example.test/watch/3"]);
+        candidates[0].Title.ShouldBe("First video");
+        candidates[0].Extractor.ShouldBe("example:collection");
+        candidates[1].Platform.ShouldBe("other");
+    }
+
+    [Test]
+    public void Channel_Discovery_Does_Not_Construct_A_Media_Url_From_A_Collection_Id()
+    {
+        var source = CreateSource(50);
+        var entry = new VideoInfo { Id = "collection-id", WebpageUrl = source.SourceUrl };
+
+        ChannelDiscoveryConsumerService.ResolveCanonicalUrl(source, entry, entry.Id).ShouldBeNull();
     }
 
     [Test]
