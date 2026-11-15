@@ -83,7 +83,7 @@ public sealed class DownloadJobV2Flow(
         if (await StopIfRequestedAsync(run, "Stopped before media acquisition."))
             return;
 
-        await Capture(() => V2(r => r.TransitionAsync(jobId, runId, DownloadJobStatus.Running,
+        await Capture(() => V2(r => r.TransitionAsync(jobId, runId, DownloadJobStatus.Queued,
             DownloadStage.WaitingForWorker, DownloadStageStatus.Pending)));
         var downloaded = await RunMediaAcquireAsync(run, request, workerTag);
         if (downloaded is null)

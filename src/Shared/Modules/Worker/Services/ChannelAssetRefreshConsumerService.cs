@@ -15,6 +15,7 @@ public sealed class ChannelAssetRefreshConsumerService(
     IDurableJobConsumer consumer,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
+    CollectionCapacityGate capacityGate,
     PotOptionsApplier potOptionsApplier,
     AssetCacheWriter assetCacheWriter,
     IOptions<AssetCacheOptions> assetCacheOptions,
@@ -37,7 +38,10 @@ public sealed class ChannelAssetRefreshConsumerService(
             {
                 try
                 {
-                    await HandleAsync(context.Message, stoppingToken);
+                    await using var permit = await capacityGate.AcquireAsync(context,
+                        DeterministicGuid.Create(Guid.Empty, context.Message.IdempotencyKey), null, stoppingToken);
+                    if (permit is not null)
+                        await HandleAsync(context.Message, permit.CancellationToken);
                     await context.AckAsync();
                 }
                 catch (Exception ex)

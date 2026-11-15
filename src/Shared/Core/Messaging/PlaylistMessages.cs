@@ -86,6 +86,7 @@ public sealed record PlaylistRequested : IPlaylistFlowMessage
 public sealed record FetchPlaylistMetadataCommand : IPlaylistFlowMessage
 {
     public required Guid PlaylistId { get; init; }
+    public Guid? GroupId { get; init; }
     public required Guid CorrelationId { get; init; }
     public Guid? CausationId { get; init; }
     public required Guid MessageId { get; init; }

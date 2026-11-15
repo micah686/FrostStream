@@ -266,6 +266,10 @@ public sealed class PlaylistsRepository(
         if (!jobExists)
         {
             var occurredAt = clock.GetCurrentInstant();
+            if (request.InitialState != DownloadJobState.Ignored)
+                await db.AfterCommitAsync(() => _stateNotifier.NotifyV2Async(request.JobId, request.CorrelationId,
+                    DownloadJobStatus.Queued, DownloadJobStatus.Queued, DownloadStage.None,
+                    DownloadStageStatus.Pending, null, 0, 0, null, 0, ct));
             await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordDailyActivityAsync(db, null, "created", occurredAt, 0, 0, ct));
             await db.AfterCommitAsync(() => DownloadStatisticsRecorder.RecordChannelDailyStatesAsync(db, null, request.EntryUrl, "created", occurredAt, ct));
             if (request.InitialState == DownloadJobState.Ignored)

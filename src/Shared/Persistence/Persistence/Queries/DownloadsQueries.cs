@@ -71,6 +71,18 @@ internal static class DownloadsQueries
             """
             SELECT * FROM jobs_download_jobs WHERE job_id = {fs0}
             """),
+        ["DownloadFlowV2Repository.LockWorkerCapacityAsync.1"] = new(
+            "INSERT INTO jobs.worker_capacities (worker_id, max_active_jobs) VALUES ({fs0}, 2) ON CONFLICT (worker_id) DO NOTHING",
+            "INSERT INTO jobs_worker_capacities (worker_id, max_active_jobs) VALUES ({fs0}, 2) ON CONFLICT (worker_id) DO NOTHING"),
+        ["DownloadFlowV2Repository.LockWorkerCapacityAsync.2"] = new(
+            "UPDATE jobs.worker_capacities SET max_active_jobs=max_active_jobs WHERE worker_id={fs0}",
+            "UPDATE jobs_worker_capacities SET max_active_jobs=max_active_jobs WHERE worker_id={fs0}"),
+        ["WorkerRegistryConsumerService.UpdateCapacity.1"] = new(
+            "INSERT INTO jobs.worker_capacities (worker_id, max_active_jobs) VALUES ({fs0}, {fs1}) ON CONFLICT (worker_id) DO UPDATE SET max_active_jobs=EXCLUDED.max_active_jobs",
+            "INSERT INTO jobs_worker_capacities (worker_id, max_active_jobs) VALUES ({fs0}, {fs1}) ON CONFLICT (worker_id) DO UPDATE SET max_active_jobs=EXCLUDED.max_active_jobs"),
+        ["WorkerRegistryConsumerService.LockCollectionGroup.1"] = new(
+            "SELECT * FROM jobs.download_groups WHERE group_id={fs0} FOR UPDATE",
+            "SELECT * FROM jobs_download_groups WHERE group_id={fs0}"),
         ["UserNotesRepository.ChannelExistsAsync.1"] = new(
             """
             SELECT EXISTS (SELECT 1 FROM metadata.accounts WHERE id = @account_id)

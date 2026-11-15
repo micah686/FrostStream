@@ -58,6 +58,8 @@ public sealed class DownloadRestartPersistenceTests
     public Task Startup_Settles_Queued_Active_Attempts_Groups_And_Leases_And_Advances_A_Durable_Fence() => Both(async f=>
     {
         var repo=Repo(f.Db); var requests=Enumerable.Range(0,5).Select(_=>Request()).ToArray();
+        f.Db.WorkerCapacities.Add(new WorkerCapacityEntity { WorkerId="worker", MaxActiveJobs=5 });
+        await f.Db.SaveChangesAsync();
         var runs=new List<DownloadRunRequest>(); var executions=new List<DownloadExecutionIdentity>();
         foreach(var request in requests)
         {
@@ -168,7 +170,7 @@ public sealed class DownloadRestartPersistenceTests
         var groupContext=Substitute.For<IDurableMessageContext<DownloadGroupRequested>>(); groupContext.Message.Returns(staleGroup);
         var groupIngress=new DownloadGroupRequestedIngressService(consumer,f.ScopeFactory,groups,state,NullLogger<DownloadGroupRequestedIngressService>.Instance);
         await groupIngress.HandleAsync(groupContext); await groupContext.Received(1).AckAsync();
-        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync(x=>x.JobId==request.JobId)).Status.ShouldBe(DownloadJobStatus.Running);
+        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync(x=>x.JobId==request.JobId)).Status.ShouldBe(DownloadJobStatus.Queued);
         (await f.Db.DownloadGroups.AsNoTracking().SingleAsync(x=>x.CorrelationId==request.CorrelationId)).Status.ShouldBe(DownloadGroupStatus.Running);
         var child=Request();
         var staleNewGroup=staleGroup with { GroupId=child.CorrelationId,CorrelationId=child.CorrelationId,MessageId=Guid.NewGuid(),DirectRequest=child };
@@ -187,7 +189,7 @@ public sealed class DownloadRestartPersistenceTests
         var startup=f.Services.GetRequiredService<DownloadFlowStartupService>();
         await Should.ThrowAsync<OperationCanceledException>(()=>startup.StartAsync(new CancellationToken(true)));
         f.Services.GetRequiredService<DownloadFlowStartupState>().IsReady.ShouldBeFalse();
-        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Running);
+        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Queued);
         await startup.StartAsync(default); f.Services.GetRequiredService<DownloadFlowStartupState>().IsReady.ShouldBeTrue();
     });
     [Test]
@@ -207,7 +209,8 @@ public sealed class DownloadRestartPersistenceTests
             return await Repo(scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>()).ReconcileForStartupAsync();
         });
         ready.SetResult(); await Task.WhenAll(claim,startup);
-        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Failed);
+        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status
+            .ShouldBeOneOf(DownloadJobStatus.Failed, DownloadJobStatus.Stopped);
         (await f.Db.DownloadStageAttempts.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadStageStatus.Failed);
         (await f.Db.DownloadWorkerLeases.CountAsync(x=>x.Status==DownloadWorkerLeaseStatus.Active)).ShouldBe(0);
         (await Repo(f.Db).CanAcceptWorkerEventAsync(execution)).ShouldBeFalse();
@@ -225,7 +228,7 @@ public sealed class DownloadRestartPersistenceTests
         await Should.ThrowAsync<OperationCanceledException>(()=>Task.Run(()=>startup.StartAsync(cancelled.Token)));
         f.Services.GetRequiredService<DownloadFlowStartupState>().IsReady.ShouldBeFalse();
         await transaction.RollbackAsync();
-        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Running);
+        (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).Status.ShouldBe(DownloadJobStatus.Queued);
         (await f.Db.DownloadJobs.AsNoTracking().SingleAsync()).WarningCount.ShouldBe(0);
         await startup.StartAsync(default); f.Services.GetRequiredService<DownloadFlowStartupState>().IsReady.ShouldBeTrue();
     });

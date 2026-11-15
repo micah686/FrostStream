@@ -108,7 +108,7 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
       const frame = JSON.parse(event.data) as StateFrame;
       const row = rows.get(frame.jobId);
       if (row) {
-        if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup)) {
+        if (!statusMatchesFilter(frame.status, currentParams.status, currentParams.stateGroup, currentParams.statuses)) {
           void refresh();
           return;
         }
@@ -129,10 +129,11 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
             updatedAt: frame.occurredAt
           }
         });
+        // Resolve titles after metadata completes; the compact SSE frame omits titles.
         // The compact SSE frame intentionally omits failure text, completion timestamps, and
         // storage fields. Refresh terminal transitions so the row immediately shows the complete
         // authoritative result (including provider-circuit details and warnings).
-        if (['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
+        if ((row.job.stage === 'Metadata' && frame.stage !== 'Metadata') || ['completed', 'completedwithwarnings', 'alreadydownloaded', 'ignored', 'failed', 'stopped'].includes(
           normalizeStatus(frame.status)
         )) {
           void refresh();
@@ -191,7 +192,8 @@ export function createDownloadQueueStore(deps: DownloadQueueStoreDeps = defaultD
   };
 }
 
-function statusMatchesFilter(status: string, exactStatus?: string, stateGroup?: string): boolean {
+function statusMatchesFilter(status: string, exactStatus?: string, stateGroup?: string, statuses?: string): boolean {
+  if (statuses !== undefined) return statuses.split(',').some(value => normalizeStatus(value) === normalizeStatus(status));
   if (exactStatus) {
     return normalizeStatus(status) === normalizeStatus(exactStatus);
   }

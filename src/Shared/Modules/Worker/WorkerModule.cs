@@ -109,6 +109,8 @@ public static class WorkerModule
         // Worker tag routing config.
         builder.Services.AddOptions<WorkerOptions>()
             .Bind(builder.Configuration.GetSection(WorkerOptions.SectionName));
+        builder.Services.AddSingleton<WorkerInstanceIdentity>();
+        builder.Services.AddSingleton<CollectionCapacityGate>();
 
         // Channel-asset cache wiring.
         builder.Services.AddOptions<AssetCacheOptions>()

@@ -10,13 +10,12 @@ namespace Worker.Services;
 public sealed class WorkerHeartbeatService(
     IMessageBus messageBus,
     IOptions<WorkerOptions> options,
+    WorkerInstanceIdentity identity,
     IClock clock,
     ILogger<WorkerHeartbeatService> logger,
     Shared.Deployment.ApplicationStartupGate? startup = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
-    private readonly string workerId = Environment.GetEnvironmentVariable("FROSTSTREAM_WORKER_ID")
-        ?? $"{Environment.MachineName}:{Environment.ProcessId}";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,7 +27,7 @@ public sealed class WorkerHeartbeatService(
             {
                 await messageBus.PublishAsync(WorkerRegistrySubjects.Heartbeat, new WorkerHeartbeat
                 {
-                    WorkerId = workerId,
+                    WorkerId = identity.Id,
                     Name = string.IsNullOrWhiteSpace(configured.Name) ? Environment.MachineName : configured.Name.Trim(),
                     Tags = configured.Tags,
                     IncomingRoot = configured.IncomingRoot,

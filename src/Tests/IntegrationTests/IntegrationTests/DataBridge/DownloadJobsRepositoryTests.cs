@@ -185,8 +185,8 @@ public sealed class DownloadJobsRepositoryTests
         restarted.RunId.ShouldNotBe(initial.RunId);
         restarted.RunNumber.ShouldBe(2);
         var job = await db.DownloadJobs.SingleAsync(x => x.JobId == jobId);
-        job.Status.ShouldBe(DownloadJobStatus.Running);
-        job.State.ShouldBe(DownloadJobState.MetadataPending);
+        job.Status.ShouldBe(DownloadJobStatus.Queued);
+        job.State.ShouldBe(DownloadJobState.Queued);
         job.CurrentRunId.ShouldBe(restarted.RunId);
         job.CurrentRunNumber.ShouldBe(2);
         job.CurrentAttempt.ShouldBe(0);
@@ -314,6 +314,66 @@ public sealed class DownloadJobsRepositoryTests
     }
 
     [Test]
+    public async Task Queue_Filters_Multiple_Statuses_Before_Paging()
+    {
+        await using var db = Fixture.CreateDb();
+        db.DownloadJobs.AddRange(
+            Job(Guid.NewGuid(), DownloadJobState.Completed),
+            Job(Guid.NewGuid(), DownloadJobState.DownloadQueued),
+            Job(Guid.NewGuid(), DownloadJobState.FailedPermanent));
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+        var result = await repository.QueryQueueAsync(new DownloadQueueListRequest
+        {
+            Statuses = [DownloadJobStatus.Queued, DownloadJobStatus.Failed], Limit = 1
+        });
+        result.TotalCount.ShouldBe(2);
+        result.Items.Count.ShouldBe(1);
+        result.NextCursor.ShouldNotBeNull();
+        (await repository.QueryQueueAsync(new DownloadQueueListRequest { Statuses = [] }))
+            .TotalCount.ShouldBe(0);
+    }
+
+    [Test]
+    public async Task Queue_Resolves_Metadata_And_Collection_Titles()
+    {
+        await using var db = Fixture.CreateDb();
+        var job = Job(Guid.NewGuid(), DownloadJobState.Queued);
+        var playlistId = Guid.NewGuid();
+        db.DownloadJobs.Add(job);
+        db.Playlists.Add(new PlaylistEntity
+        {
+            PlaylistId = playlistId, CorrelationId = job.CorrelationId,
+            SourceUrl = "https://example.test/playlist"
+        });
+        db.PlaylistSourceMetadata.Add(new PlaylistSourceMetadataEntity
+        {
+            PlaylistId = playlistId, Title = "Creator's uploads"
+        });
+        db.PlaylistItems.Add(new PlaylistItemEntity
+        {
+            PlaylistId = playlistId, JobId = job.JobId, PlaylistIndex = 1,
+            EntryUrl = job.SourceUrl, EntryTitle = "Entry title"
+        });
+        await db.SaveChangesAsync();
+        var repository = new DownloadJobsRepository(db, SystemClock.Instance);
+        (await repository.GetQueueJobAsync(job.JobId))!.Title.ShouldBe("Entry title");
+        var metadata = new MetadataFetched
+        {
+            JobId = job.JobId, CorrelationId = job.CorrelationId,
+            MessageId = Guid.NewGuid(), OperationKey = "metadata/title",
+            OccurredAt = Fixture.Now, Attempt = 1, Title = "Resolved video title"
+        };
+        await repository.RecordHistoryAsync(job.JobId, metadata.MessageId, metadata.OperationKey,
+            nameof(MetadataFetched), System.Text.Json.JsonSerializer.Serialize(metadata));
+        var item = (await repository.QueryQueueAsync(new DownloadQueueListRequest())).Items.Single();
+        item.Title.ShouldBe("Resolved video title");
+        item.CollectionTitle.ShouldBe("Creator's uploads");
+        item.CollectionSourceUrl.ShouldBe("https://example.test/playlist");
+        (await repository.GetQueueJobAsync(job.JobId))!.Title.ShouldBe(item.Title);
+    }
+
+    [Test]
     public async Task GetQueueJobAsync_Returns_Snapshot_Or_Null()
     {
         var jobId = Guid.NewGuid();
@@ -392,7 +452,7 @@ public sealed class DownloadJobsRepositoryTests
 
         notifier.V2Calls.Count.ShouldBe(2);
         notifier.V2Calls[^1].JobId.ShouldBe(jobId);
-        notifier.V2Calls[^1].Status.ShouldBe(DownloadJobStatus.Running);
+        notifier.V2Calls[^1].Status.ShouldBe(DownloadJobStatus.Queued);
         notifier.V2Calls[^1].Stage.ShouldBe(DownloadStage.Metadata);
         notifier.V2Calls[^1].Attempt.ShouldBe(1);
     }
@@ -450,6 +510,7 @@ public sealed class DownloadJobsRepositoryTests
         (await db.MediaSourceVersions.CountAsync(x => x.SourceMediaId == sourceMediaId)).ShouldBe(0);
         var execution = Execution(run, DownloadStage.Finalize, 1);
         (await v2.BeginStageAttemptAsync(execution, "finalize/attempt/1")).ShouldBeTrue();
+        await ClaimAsync(v2, execution);
 
         (await v2.FinalizeRunAsync(
             execution,
@@ -522,6 +583,7 @@ public sealed class DownloadJobsRepositoryTests
         await db.SaveChangesAsync();
         var execution = Execution(run, DownloadStage.Finalize, 1);
         (await repository.BeginStageAttemptAsync(execution, "finalize/attempt/1")).ShouldBeTrue();
+        await ClaimAsync(repository, execution);
 
         (await repository.FinalizeRunAsync(execution, mediaGuid)).ShouldBeTrue();
 
@@ -631,6 +693,9 @@ public sealed class DownloadJobsRepositoryTests
             .SetProperty(x => x.StageStatus, DownloadStageStatus.Pending));
         var active = await repository.CreateInitialRunAsync(Request(activeId, Guid.NewGuid()), autoStart: true);
         active.ShouldNotBeNull();
+        var execution = Execution(active, DownloadStage.Metadata, 1);
+        (await repository.BeginStageAttemptAsync(execution, "metadata/attempt/1")).ShouldBeTrue();
+        await ClaimAsync(repository, execution);
         var runsBefore = await db.DownloadJobRuns.CountAsync();
 
         var result = await repository.ReconcileForStartupAsync();
@@ -656,6 +721,12 @@ public sealed class DownloadJobsRepositoryTests
         var activeRun = await repository.CreateInitialRunAsync(Request(activeId, correlationId), autoStart: true);
         completedRun.ShouldNotBeNull();
         activeRun.ShouldNotBeNull();
+        var completedExecution = Execution(completedRun, DownloadStage.Metadata, 1);
+        (await repository.BeginStageAttemptAsync(completedExecution, "metadata/attempt/1")).ShouldBeTrue();
+        await ClaimAsync(repository, completedExecution);
+        var activeExecution = Execution(activeRun, DownloadStage.Metadata, 1);
+        (await repository.BeginStageAttemptAsync(activeExecution, "metadata/attempt/1")).ShouldBeTrue();
+        await ClaimAsync(repository, activeExecution);
         (await repository.CompleteRunAsync(completedId, completedRun.RunId, withWarnings: false)).ShouldBeTrue();
 
         await repository.StopGroupAsync(correlationId, "tester", "stop collection");
@@ -741,6 +812,17 @@ public sealed class DownloadJobsRepositoryTests
             ArtifactKey = artifactKey,
             Attempt = attempt
         };
+
+    private static async Task ClaimAsync(DownloadFlowV2Repository repository, DownloadExecutionIdentity execution)
+    {
+        var lease = await repository.TryAcquireLeaseAsync(new AcquireDownloadLeaseRequest
+        {
+            Execution = execution,
+            WorkerInstanceId = $"worker-{Guid.NewGuid():N}",
+            OccurredAt = SystemClock.Instance.GetCurrentInstant()
+        });
+        lease.Granted.ShouldBeTrue(lease.RejectionCode);
+    }
 
     private static DownloadJobStatus LegacyStatus(DownloadJobState state)
         => state switch

@@ -18,6 +18,7 @@ public sealed class ChannelDiscoveryConsumerService(
     IDurableJobPublisher publisher,
     IMessageBus messageBus,
     IYtDlpClient ytDlp,
+    CollectionCapacityGate capacityGate,
     PotOptionsApplier potOptionsApplier,
     [Microsoft.Extensions.DependencyInjection.FromKeyedServices("worker")] IBackgroundRunReporter runReporter,
     IClock clock,
@@ -36,11 +37,26 @@ public sealed class ChannelDiscoveryConsumerService(
         {
             Consume<ChannelScanRefreshRequested>(
                 BackgroundJobsTopology.WorkerChannelScanRefreshConsumer,
-                async message => { await HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, stoppingToken); },
+                async context =>
+                {
+                    var message = context.Message;
+                    await using var permit = await capacityGate.AcquireAsync(context,
+                        DeterministicGuid.Create(Guid.Empty, message.IdempotencyKey), null, stoppingToken);
+                    if (permit is not null)
+                        await HandleScheduledScanAsync(message, CreatorSourceScanMode.Incremental, permit.CancellationToken);
+                },
                 stoppingToken),
             Consume<ChannelScanFullRequested>(
                 BackgroundJobsTopology.WorkerChannelScanFullConsumer,
-                message => HandleChannelScanFullAsync(message, stoppingToken),
+                async context =>
+                {
+                    var message = context.Message;
+                    await using var permit = await capacityGate.AcquireAsync(context,
+                        message.ExpansionDispatchId ?? DeterministicGuid.Create(Guid.Empty, message.IdempotencyKey),
+                        message.GroupId, stoppingToken);
+                    if (permit is not null)
+                        await HandleChannelScanFullAsync(message, permit.CancellationToken);
+                },
                 stoppingToken)
         };
 
@@ -50,7 +66,7 @@ public sealed class ChannelDiscoveryConsumerService(
 
     private Task Consume<TMessage>(
         string consumerName,
-        Func<TMessage, Task> handler,
+        Func<IDurableMessageContext<TMessage>, Task> handler,
         CancellationToken stoppingToken)
         where TMessage : ScheduledBackgroundRequest
         => consumer.ConsumePullAsync<TMessage>(
@@ -60,7 +76,7 @@ public sealed class ChannelDiscoveryConsumerService(
             {
                 try
                 {
-                    await handler(context.Message);
+                    await handler(context);
                     await context.AckAsync();
                 }
                 catch (Exception ex)

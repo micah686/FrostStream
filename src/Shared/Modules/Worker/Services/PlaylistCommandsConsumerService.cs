@@ -20,6 +20,7 @@ public sealed class PlaylistCommandsConsumerService(
     IDurableJobConsumer consumer,
     IDurableJobPublisher publisher,
     IYtDlpClient ytDlp,
+    CollectionCapacityGate capacityGate,
     PotOptionsApplier potOptionsApplier,
     IClock clock,
     ILogger<PlaylistCommandsConsumerService> logger) : BackgroundService
@@ -27,9 +28,11 @@ public sealed class PlaylistCommandsConsumerService(
     internal const int MaxPlaylistEntriesPerRequest = 5_000;
 
     private static readonly StreamName Stream = StreamName.From(PlaylistTopology.StreamNameValue);
+    private CancellationToken serviceStoppingToken;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        serviceStoppingToken = stoppingToken;
         var task = consumer.ConsumePullAsync<FetchPlaylistMetadataCommand>(
             stream: Stream,
             consumer: ConsumerName.From(PlaylistTopology.WorkerFetchPlaylistMetadataConsumer),
@@ -47,6 +50,13 @@ public sealed class PlaylistCommandsConsumerService(
 
         try
         {
+            await using var permit = await capacityGate.AcquireAsync(context, cmd.MessageId,
+                cmd.GroupId, serviceStoppingToken);
+            if (permit is null)
+            {
+                await context.AckAsync();
+                return;
+            }
             var entries = new List<PlaylistEntry>();
             string? title = null;
             string? providerPlaylistId = null;
@@ -56,10 +66,12 @@ public sealed class PlaylistCommandsConsumerService(
             var playlistOptions = BuildPlaylistOptions(pageStartIndex, pageSize);
 
             // First, get the top-level playlist metadata (with flat entries embedded).
-            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, flat: true, overrideOptions: potOptionsApplier.Apply(playlistOptions));
+            var topResult = await ytDlp.TryGetVideoInfoAsync(cmd.SourceUrl, ct: permit.CancellationToken,
+                flat: true, overrideOptions: potOptionsApplier.Apply(playlistOptions));
             if (topResult.Success && topResult.Data is { } container)
             {
-                title = container.PlaylistTitle ?? container.Title;
+                title = new[] { container.PlaylistTitle, container.Title, container.Channel, container.Uploader }
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
                 providerPlaylistId = container.PlaylistId ?? container.Id;
 
                 if (container.Entries is { Count: > 0 } childEntries)
@@ -85,7 +97,8 @@ public sealed class PlaylistCommandsConsumerService(
                     // Fall back to the streaming flat-playlist endpoint when the top-level
                     // dump did not embed the entries (some extractors return them piecemeal).
                     var streamedIndex = 0;
-                    await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl, overrideOptions: potOptionsApplier.Apply(null)))
+                    await foreach (var entry in ytDlp.GetPlaylistInfoAsync(cmd.SourceUrl,
+                                       ct: permit.CancellationToken, overrideOptions: potOptionsApplier.Apply(null)))
                     {
                         streamedIndex++;
                         var resolvedIndex = entry.PlaylistIndex ?? streamedIndex;
@@ -161,6 +174,11 @@ public sealed class PlaylistCommandsConsumerService(
                 Entries = entries
             });
             await context.AckAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // A worker shutdown or lost capacity lease must leave this listing command retryable.
+            await context.NackAsync();
         }
         catch (YtDlpUnavailableException ex)
         {

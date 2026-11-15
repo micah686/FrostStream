@@ -75,52 +75,39 @@
   <title>Background · Jobs · FrostStream</title>
 </svelte:head>
 
-<div aria-labelledby="background-title">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 id="background-title" class="text-lg font-semibold tracking-tight text-base-content">Background</h2>
-      <p class="mt-1 text-sm text-base-content/50">
-        Every schedule that has gone off, from the moment it fires until it finishes
-        {#if jobsState.runningCount > 0}
-          · <span class="font-semibold text-primary">{jobsState.runningCount} running</span>
-        {/if}
-        {#if jobsState.queuedCount > 0}
-          · <span class="font-semibold text-warning">{jobsState.queuedCount} queued</span>
-        {/if}
-        {#if finishedCount > 0}
-          · {finishedCount} recently finished
-        {/if}
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
-      {#if jobsState.connected}
-        <span class="badge badge-success h-8 px-3 text-xs font-semibold text-success-content">SSE Live</span>
-      {/if}
-      <button
-        type="button"
-        class="btn btn-sm btn-neutral text-xs disabled:opacity-40"
-        disabled={refreshing}
-        onclick={refresh}
-      >
-        <RefreshCw class={['h-3.5 w-3.5', refreshing ? 'animate-spin' : '']} />
-        Refresh
-      </button>
-    </div>
-  </div>
+<section class="overflow-hidden rounded-lg border border-base-300 bg-base-200/40" aria-labelledby="background-title">
+  <header class="flex flex-wrap items-center gap-3 px-5 pt-5">
+    <h2 id="background-title" class="text-xl font-semibold tracking-tight">Background</h2>
+    <span class={['inline-flex items-center gap-1.5 text-xs', jobsState.connected ? 'text-success' : 'text-base-content/50']} role="status">
+      <span class={['h-1.5 w-1.5 rounded-full', jobsState.connected ? 'bg-success' : 'bg-base-content/30']}></span>
+      {jobsState.connected ? 'Live' : 'Reconnecting'}
+    </span>
+    <button type="button" class="btn btn-sm btn-primary ml-auto text-xs" disabled={refreshing} onclick={refresh}>
+      <RefreshCw class={['h-3.5 w-3.5', refreshing ? 'animate-spin' : '']} />Refresh
+    </button>
+  </header>
+
+  <div class="p-3.5 sm:p-5">
+    <p class="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60">
+      <span>{jobsState.runs.length} recent runs</span>
+      {#if jobsState.runningCount > 0}<span class="text-primary">{jobsState.runningCount} running</span>{/if}
+      {#if jobsState.queuedCount > 0}<span class="text-warning">{jobsState.queuedCount} queued</span>{/if}
+      {#if finishedCount > 0}<span>{finishedCount} finished</span>{/if}
+    </p>
 
   {#if jobsState.error}
-    <p class="alert alert-error mt-4 text-sm" role="alert">
+    <p class="alert alert-error mb-4 text-sm" role="alert">
       {jobsState.error}
     </p>
   {/if}
 
   {#if jobsState.loading && jobsState.runs.length === 0}
-    <div class="mt-6 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="py-10 text-center">
       <span class="loading loading-spinner loading-md text-base-content/40"></span>
       <p class="mt-4 text-sm text-base-content/50">Loading background tasks…</p>
     </div>
   {:else if jobsState.runs.length === 0}
-    <div class="mt-6 rounded-box border-[length:var(--border)] border-base-300/80 bg-base-200/40 p-10 text-center">
+    <div class="py-10 text-center">
       <Clock class="mx-auto h-10 w-10 text-base-content/30" />
       <p class="mt-4 text-sm font-semibold text-base-content/80">No background tasks are running</p>
       <p class="mt-1 text-sm text-base-content/50">
@@ -130,27 +117,28 @@
       </p>
     </div>
   {:else}
-    <div class="mt-6 flex flex-col gap-3">
+    <div class="flex flex-col gap-2">
       {#each visibleRuns as run (run.runId)}
         <BackgroundRunRow {run} {now} />
       {/each}
     </div>
 
-    <div class="mt-6 flex flex-col gap-3 border-t border-base-300/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p class="text-xs text-base-content/40">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <p class="text-xs tabular-nums text-base-content/55">
         Showing {Math.min((page - 1) * pageSize + 1, jobsState.runs.length)}-{Math.min(page * pageSize, jobsState.runs.length)}
         of {jobsState.runs.length}
       </p>
       <div class="flex gap-2">
-        <button class="btn btn-sm btn-neutral text-xs" disabled={page <= 1} onclick={() => (page = Math.max(1, page - 1))}>
-          <ChevronLeft class="mr-1 h-3.5 w-3.5" />
+        <button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={page <= 1} onclick={() => (page = Math.max(1, page - 1))}>
+          <ChevronLeft class="h-3.5 w-3.5" />
           Previous
         </button>
-        <button class="btn btn-sm btn-neutral text-xs" disabled={page >= totalPages} onclick={() => (page = Math.min(totalPages, page + 1))}>
+        <button class="btn btn-sm bg-base-100 text-xs font-normal" disabled={page >= totalPages} onclick={() => (page = Math.min(totalPages, page + 1))}>
           Next
-          <ChevronRight class="ml-1 h-3.5 w-3.5" />
+          <ChevronRight class="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
   {/if}
-</div>
+  </div>
+</section>

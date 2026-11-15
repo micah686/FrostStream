@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, CircleAlert } from '@lucide/svelte';
+  import { ChevronDown, CircleAlert, Clock } from '@lucide/svelte';
   import { humanizeTaskType, type BackgroundRun } from '#lib/api/backgroundJobs.js';
 
   let { run, now }: { run: BackgroundRun; now: number } = $props();
@@ -24,12 +24,12 @@
 
   function statusTone(status: string): string {
     if (status === 'completed') {
-      return 'badge-success text-success-content';
+      return 'badge-soft badge-success';
     }
     if (status === 'failed') {
-      return 'badge-error text-error-content';
+      return 'badge-soft badge-error';
     }
-    return 'badge-primary text-primary-content';
+    return status === 'running' ? 'badge-soft badge-primary' : 'badge-ghost';
   }
 
   function displayStatus(status: string): string {
@@ -39,23 +39,10 @@
       case 'failed':
         return 'Failed';
       case 'running':
-        return 'Downloading';
+        return 'Running';
       default:
         return 'Queued';
     }
-  }
-
-  function rowTone(status: string): string {
-    if (status === 'failed') {
-      return 'border-error/45 bg-error/10';
-    }
-    if (status === 'running') {
-      return 'border-primary/60 bg-primary/10';
-    }
-    if (status === 'queued') {
-      return 'border-warning/45 bg-warning/8';
-    }
-    return 'border-base-300/90 bg-base-200/45';
   }
 
   /** Time on the clock: how long a queued run has been waiting, otherwise how long it has run. */
@@ -94,77 +81,33 @@
   }
 </script>
 
-<article class={['card border p-4 transition', rowTone(run.status)]}>
-  <div
-    class="grid cursor-pointer gap-3 md:grid-cols-[minmax(0,1fr)_5rem] md:items-center"
-    role="button"
-    tabindex="0"
-    aria-expanded={expanded}
-    onclick={() => (expanded = !expanded)}
-    onkeydown={(event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        expanded = !expanded;
-      }
-    }}
-  >
-    <div class="flex min-w-0 items-start gap-3">
-      <div class="min-w-0">
-        <div class="flex min-w-0 items-center gap-2">
-          <ChevronDown
-            class={['h-3.5 w-3.5 shrink-0 text-base-content/40 transition-transform', expanded ? 'rotate-180' : '']}
-          />
-          <h2 class="min-w-0 truncate text-sm font-semibold text-base-content">
-            {humanizeTaskType(run.taskType)}
-          </h2>
-          <span class={['badge badge-sm shrink-0 text-[10px] font-bold', statusTone(run.status)]}>
-            {displayStatus(run.status)}
-          </span>
-          {#if scanLabel(run.taskType)}
-            <span class="badge badge-sm shrink-0 badge-secondary text-[10px] font-bold text-secondary-content">
-              {scanLabel(run.taskType)}
-            </span>
-          {/if}
-          {#if run.trigger === 'Manual'}
-            <span class="badge badge-sm shrink-0 badge-accent text-[10px] font-bold text-accent-content">
-              MANUAL
-            </span>
-          {/if}
-          {#if run.detail && !scanLabel(run.taskType)}
-            <span class="badge badge-sm shrink-0 badge-ghost text-[10px] font-semibold">
-              {run.detail}
-            </span>
-          {/if}
-        </div>
-        <p class="mt-1 truncate text-xs text-base-content/50">
-          {run.scheduleKey ?? 'started by hand'} · {isQueued ? 'not picked up yet' : run.origin} ·
-          {isQueued ? `waiting ${elapsed(run)}` : elapsed(run)}
-        </p>
-        {#if run.message}
-          <p class="mt-1 truncate text-[11px] text-base-content/50">{run.message}</p>
-        {/if}
-        {#if run.errorMessage}
-          <p class="mt-2 line-clamp-1 text-xs text-error">{run.errorMessage}</p>
-        {/if}
-      </div>
-    </div>
-
-    <div class="flex items-center justify-center">
-      <div
-        class="radial-progress text-primary"
-        style={`--value:${percent}; --size:3.5rem;`}
-        role="progressbar"
-        aria-valuenow={Math.round(percent)}
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
-        <span class="text-[11px] font-semibold text-base-content">{Math.round(percent)}%</span>
-      </div>
-    </div>
-  </div>
+<article class="card overflow-hidden rounded-lg border border-base-300 bg-base-100">
+  <button type="button" class="grid w-full grid-cols-[2.25rem_minmax(0,1fr)_auto] gap-3 p-3.5 text-left max-[470px]:grid-cols-[minmax(0,1fr)_auto]" aria-expanded={expanded} aria-controls={`background-details-${run.runId}`} onclick={() => (expanded = !expanded)}>
+    <span class="flex h-8 items-center justify-center rounded bg-base-200 text-base-content/50 max-[470px]:hidden"><Clock class="h-4 w-4" /></span>
+    <span class="min-w-0">
+      <span class="block break-words text-sm font-semibold text-base-content">{humanizeTaskType(run.taskType)}</span>
+      <span class="mt-1 block text-xs text-base-content/55">{run.scheduleKey ?? 'Started by hand'} · {isQueued ? 'Awaiting pickup' : run.origin} · {isQueued ? `waiting ${elapsed(run)}` : elapsed(run)}</span>
+      <span class="mt-2 flex flex-wrap items-center gap-2 text-xs text-base-content/60">
+        <span class={['badge badge-sm rounded text-[11px]', statusTone(run.status)]}>{displayStatus(run.status)}</span>
+        {#if scanLabel(run.taskType)}<span>{scanLabel(run.taskType)}</span>{/if}
+        {#if run.detail && !scanLabel(run.taskType)}<span>{run.detail}</span>{/if}
+      </span>
+      {#if run.message}<span class="mt-2 block break-words text-xs text-base-content/60">{run.message}</span>{/if}
+      {#if run.errorMessage}<span class="mt-2 block break-words text-xs text-error">{run.errorMessage}</span>{/if}
+      {#if run.status === 'running'}
+        <progress class="progress progress-primary mt-3 block h-1 w-full" value={percent} max="100" aria-label="Background run progress"></progress>
+        <span class="mt-1 block text-xs tabular-nums text-base-content/55">{Math.round(percent)}% complete</span>
+      {/if}
+      <span class="mt-3 flex items-center gap-1.5 text-xs text-base-content/60">
+        {expanded ? 'Hide details' : 'View details'}
+        <ChevronDown class={['h-3.5 w-3.5 transition-transform', expanded && 'rotate-180']} />
+      </span>
+    </span>
+    <span class="badge badge-sm badge-ghost rounded text-[11px] text-base-content/60">{run.trigger}</span>
+  </button>
 
   {#if expanded}
-    <div class="mt-3 border-t border-base-300/70 pt-3">
+    <div id={`background-details-${run.runId}`} class="border-t border-base-300 bg-base-200/40 p-3.5 sm:pl-15">
       <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-base-content/50">
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="shrink-0 text-base-content/40">Run ID</span>

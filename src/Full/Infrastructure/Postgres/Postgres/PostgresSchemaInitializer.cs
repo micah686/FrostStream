@@ -54,6 +54,26 @@ internal sealed class PostgresSchemaInitializer(NpgsqlDataSource source) : IAppl
                 command.Parameters.AddWithValue("next", (object?)schedule.Next ?? DBNull.Value); command.ExecuteNonQuery();
             }
         }
+        command.Parameters.Clear();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS jobs.worker_capacities (
+                worker_id text PRIMARY KEY,
+                max_active_jobs integer NOT NULL CHECK (max_active_jobs BETWEEN 1 AND 32)
+            );
+            ALTER TABLE jobs.download_jobs ADD COLUMN IF NOT EXISTS assigned_worker_id text;
+            CREATE INDEX IF NOT EXISTS ix_download_jobs_assigned_worker_id
+                ON jobs.download_jobs(assigned_worker_id);
+            CREATE TABLE IF NOT EXISTS jobs.collection_worker_leases (
+                dispatch_id uuid PRIMARY KEY,
+                worker_id text NOT NULL,
+                group_id uuid,
+                expires_at timestamp with time zone NOT NULL,
+                released_at timestamp with time zone
+            );
+            CREATE INDEX IF NOT EXISTS ix_jobs_collection_worker_leases_worker_id_released_at_expires_at
+                ON jobs.collection_worker_leases(worker_id, released_at, expires_at);
+            """;
+        command.ExecuteNonQuery();
         cancellationToken.ThrowIfCancellationRequested(); transaction.Commit();
     }
 }

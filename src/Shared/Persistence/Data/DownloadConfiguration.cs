@@ -26,6 +26,7 @@ public sealed class DownloadJobConfiguration : IEntityTypeConfiguration<Download
         builder.Property(x => x.Stage).HasColumnName("stage").HasPersistenceType("jobs.download_stage").IsRequired();
         builder.Property(x => x.StageStatus).HasColumnName("stage_status").HasPersistenceType("jobs.download_stage_status").IsRequired();
         builder.Property(x => x.CurrentRunId).HasColumnName("current_run_id");
+        builder.Property(x => x.AssignedWorkerId).HasColumnName("assigned_worker_id").HasMaxLength(255);
         builder.Property(x => x.CurrentRunNumber).HasColumnName("current_run_number").IsRequired();
         builder.Property(x => x.CurrentAttempt).HasColumnName("current_attempt").IsRequired();
         builder.Property(x => x.CurrentArtifactKey).HasColumnName("current_artifact_key").HasMaxLength(512);
@@ -233,6 +234,32 @@ public sealed class DownloadWorkerLeaseConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.ReleasedAt).HasColumnName("released_at").HasPersistenceType("timestamp with time zone");
         builder.HasIndex(x => new { x.Status, x.ExpiresAt }).HasDatabaseName("ix_download_worker_leases_status_expiry");
         builder.HasOne<DownloadJobRunEntity>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class WorkerCapacityConfiguration : IEntityTypeConfiguration<WorkerCapacityEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkerCapacityEntity> builder)
+    {
+        builder.ToTable("worker_capacities", "jobs");
+        builder.HasKey(x => x.WorkerId);
+        builder.Property(x => x.WorkerId).HasColumnName("worker_id").HasMaxLength(255).ValueGeneratedNever();
+        builder.Property(x => x.MaxActiveJobs).HasColumnName("max_active_jobs").IsRequired();
+    }
+}
+
+public sealed class CollectionWorkerLeaseConfiguration : IEntityTypeConfiguration<CollectionWorkerLeaseEntity>
+{
+    public void Configure(EntityTypeBuilder<CollectionWorkerLeaseEntity> builder)
+    {
+        builder.ToTable("collection_worker_leases", "jobs");
+        builder.HasKey(x => x.DispatchId);
+        builder.Property(x => x.DispatchId).HasColumnName("dispatch_id").ValueGeneratedNever();
+        builder.Property(x => x.WorkerId).HasColumnName("worker_id").HasMaxLength(255).IsRequired();
+        builder.Property(x => x.GroupId).HasColumnName("group_id");
+        builder.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasPersistenceType("timestamp with time zone").IsRequired();
+        builder.Property(x => x.ReleasedAt).HasColumnName("released_at").HasPersistenceType("timestamp with time zone");
+        builder.HasIndex(x => new { x.WorkerId, x.ReleasedAt, x.ExpiresAt });
     }
 }
 

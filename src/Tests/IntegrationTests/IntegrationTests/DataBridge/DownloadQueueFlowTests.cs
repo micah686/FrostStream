@@ -118,7 +118,7 @@ public sealed class DownloadQueueFlowTests
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
         evt.JobId.ShouldBe(jobId);
-        evt.Status.ShouldBe(DownloadJobStatus.Running);
+        evt.Status.ShouldBe(DownloadJobStatus.Queued);
         evt.Stage.ShouldBe(DownloadStage.Metadata);
         evt.StageStatus.ShouldBe(DownloadStageStatus.Pending);
         evt.RunId.ShouldBe(run.RunId);

@@ -1,6 +1,8 @@
 using DataBridge.Data;
 using FrostStream.ApplicationContracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using DataBridge.Persistence;
 using Microsoft.Extensions.Logging;
 using Shared.Messaging;
 
@@ -46,7 +48,28 @@ public sealed class DownloadQueueConsumerService(
             queueGroup: DownloadQueueSubjects.QueueGroup,
             cancellationToken: stoppingToken);
 
+        await SubscribeAsync<DownloadCollectionListRequest>(messageBus, DownloadQueueSubjects.Collections,
+            HandleCollectionsAsync, DownloadQueueSubjects.QueueGroup, stoppingToken);
+
         logger.LogInformation("Subscribed to download-queue query subjects.");
+    }
+
+    private async Task HandleCollectionsAsync(IMessageContext<DownloadCollectionListRequest> context)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DataBridgeDbContext>();
+        var items = await db.DownloadGroups.AsNoTracking()
+            .Where(x => x.Kind != DownloadGroupKind.Direct)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(500)
+            .Select(x => new DownloadCollectionDto
+            {
+                GroupId = x.GroupId, CorrelationId = x.CorrelationId, Kind = x.Kind,
+                Status = x.Status, SourceUrl = x.SourceUrl, CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt, TotalJobs = x.TotalJobs,
+                CompletedJobs = x.CompletedJobs, FailedJobs = x.FailedJobs
+            }).ToListAsync();
+        await context.RespondAsync(new DownloadCollectionListResponse { Items = items });
     }
 
     private async Task HandleListAsync(IMessageContext<DownloadQueueListRequest> context)

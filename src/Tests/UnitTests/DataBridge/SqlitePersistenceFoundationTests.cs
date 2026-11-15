@@ -86,8 +86,8 @@ public sealed class SqlitePersistenceFoundationTests
         fixture.Host.InitializeDataBridge();
         fixture.Host.InitializeDataBridge();
         using var connection = fixture.Factory.OpenConnection();
-        Scalar(connection, $"SELECT count(*) FROM {SqliteBaseline.HistoryTable}").ShouldBe(4L);
-        Scalar(connection, $"SELECT MAX(version) FROM {SqliteBaseline.HistoryTable}").ShouldBe(4L);
+        Scalar(connection, $"SELECT count(*) FROM {SqliteBaseline.HistoryTable}").ShouldBe(6L);
+        Scalar(connection, $"SELECT MAX(version) FROM {SqliteBaseline.HistoryTable}").ShouldBe(6L);
         Scalar(connection, "SELECT count(*) FROM scheduling_scheduled_tasks").ShouldBe(10L);
         Scalar(connection, "SELECT count(*) FROM storage_storage_keys").ShouldBe(1L);
         Scalar(connection, "SELECT count(*) FROM storage_storage_keys_local").ShouldBe(1L);
@@ -114,7 +114,7 @@ public sealed class SqlitePersistenceFoundationTests
         var tables = manifest.RootElement.GetProperty("tables").EnumerateArray().ToArray();
         tables.Length.ShouldBe(82);
         Scalar(connection, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'cleipnir_%' AND name NOT IN ('search_pending_index','search_index_state','search_rebuild_replay')")
-            .ShouldBe(86L); // Baseline, startup boundary, staged objects, local secrets, and history.
+            .ShouldBe(88L); // Baseline plus additive application migrations and history.
         foreach (var table in tables)
         {
             var schema = table.GetProperty("schema").GetString()!;
@@ -126,7 +126,8 @@ public sealed class SqlitePersistenceFoundationTests
                 while (reader.Read())
                     columns.Add(reader.GetString(1), (reader.GetString(2), reader.GetInt32(3) == 1, reader.GetInt32(5)));
             var expectedColumns = table.GetProperty("columns").EnumerateArray().ToArray();
-            columns.Count.ShouldBe(expectedColumns.Length, name);
+            columns.Count.ShouldBe(expectedColumns.Length + (name == "jobs_download_jobs" ? 1 : 0), name);
+            if (name == "jobs_download_jobs") columns.ShouldContainKey("assigned_worker_id");
             foreach (var column in expectedColumns)
             {
                 var colName = column.GetProperty("name").GetString()!;
@@ -254,9 +255,20 @@ public sealed class SqlitePersistenceFoundationTests
         foreach (var entity in sqlite.Model.GetEntityTypes())
         {
             entity.GetSchema().ShouldBeNull();
+            if (entity.ClrType == typeof(WorkerCapacityEntity) || entity.ClrType == typeof(CollectionWorkerLeaseEntity))
+            {
+                using var capacityConnection = fixture.Factory.OpenConnection();
+                var expected = entity.ClrType == typeof(WorkerCapacityEntity) ? 2L : 5L;
+                var tableName = entity.ClrType == typeof(WorkerCapacityEntity)
+                    ? "jobs_worker_capacities" : "jobs_collection_worker_leases";
+                Scalar(capacityConnection, $"SELECT count(*) FROM pragma_table_info('{tableName}')").ShouldBe(expected);
+                continue;
+            }
             var table = tables[entity.GetTableName()!];
             var columns = table.GetProperty("columns").EnumerateArray().Select(column => column.GetProperty("name").GetString()).ToArray();
-            foreach (var property in entity.GetProperties()) columns.ShouldContain(property.GetColumnName(), entity.Name);
+            foreach (var property in entity.GetProperties())
+                if (property.Name != nameof(DownloadJobEntity.AssignedWorkerId))
+                    columns.ShouldContain(property.GetColumnName(), entity.Name);
         }
         (await sqlite.StorageLocalConfigs.SingleAsync()).Protocol.ShouldBe(Shared.Storage.LocalStorageProtocol.Local);
         var guid = Guid.NewGuid();

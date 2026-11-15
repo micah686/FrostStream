@@ -13,6 +13,7 @@ public static class DownloadQueueSubjects
     public const string Get = "download-queue.get";
     public const string History = "download-queue.history";
     public const string Media = "download-queue.media";
+    public const string Collections = "download-queue.collections";
 
     /// <summary>
     /// Non-persistent broadcast published by DataBridge whenever a download job's status or stage
@@ -23,6 +24,27 @@ public static class DownloadQueueSubjects
 
     /// <summary>Queue group so a single DataBridge instance answers each query.</summary>
     public const string QueueGroup = "databridge-download-queue";
+}
+
+public sealed record DownloadCollectionListRequest;
+
+public sealed record DownloadCollectionListResponse
+{
+    public IReadOnlyList<DownloadCollectionDto> Items { get; init; } = [];
+}
+
+public sealed record DownloadCollectionDto
+{
+    public Guid GroupId { get; init; }
+    public Guid CorrelationId { get; init; }
+    public DownloadGroupKind Kind { get; init; }
+    public DownloadGroupStatus Status { get; init; }
+    public required string SourceUrl { get; init; }
+    public required Instant CreatedAt { get; init; }
+    public Instant UpdatedAt { get; init; }
+    public int TotalJobs { get; init; }
+    public int CompletedJobs { get; init; }
+    public int FailedJobs { get; init; }
 }
 
 /// <summary>
@@ -72,6 +94,7 @@ public enum DownloadQueueStateGroup
 /// </summary>
 public sealed record DownloadQueueListRequest
 {
+    public DownloadJobStatus[]? Statuses { get; init; }
     public DownloadJobStatus? Status { get; init; }
     /// <summary>Legacy-only filter retained for older clients; V2 clients use <see cref="Status"/>.</summary>
     public DownloadJobState? State { get; init; }
@@ -152,6 +175,9 @@ public sealed record DownloadQueueJobDto
     public int MaxAttempts { get; init; } = 3;
     public string? ArtifactKey { get; init; }
     public int WarningCount { get; init; }
+    public string? Title { get; init; }
+    public string? CollectionTitle { get; init; }
+    public string? CollectionSourceUrl { get; init; }
     public required string SourceUrl { get; init; }
     public string? RequestedBy { get; init; }
     public string? StorageKey { get; init; }
