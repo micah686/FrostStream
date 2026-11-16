@@ -26,7 +26,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="../Hosts/BackupService/BackupService.csproj" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="../Hosts/BackupServiceNew/BackupServiceNew.csproj" ReferenceOutputAssembly="false" />
       <ProjectReference Include="../Hosts/DataBridge/DataBridgeHost.csproj" ReferenceOutputAssembly="false" />
       <ProjectReference Include="../Hosts/MediaProcessor/MediaProcessorHost.csproj" ReferenceOutputAssembly="false" />
       <ProjectReference Include="../Hosts/Scheduler/SchedulerHost.csproj" ReferenceOutputAssembly="false" />
