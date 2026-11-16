@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 public enum BackupType { Full, Differential, Incremental }
 public enum RecoveryMode { Consistency, Latest, Timestamp, RestorePoint, Lsn }

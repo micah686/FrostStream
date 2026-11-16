@@ -1,4 +1,4 @@
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 public sealed partial class PgBackRestClient
 {

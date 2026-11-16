@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 /// <summary>On-demand container-local pgBackRest operations. No scheduler, worker, HTTP service or PostgreSQL driver dependency.</summary>
 public sealed partial class PgBackRestClient

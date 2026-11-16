@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 /// <summary>Runs without a shell, drains both pipes, bounds captured tails, and kills the process tree on cancellation.</summary>
 public sealed class ProcessRunner : ICommandRunner

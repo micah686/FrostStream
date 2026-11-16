@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 public sealed record ArchiveSegmentEvidence(string Name, bool Readable, long? Bytes, string? Error);
 public sealed record ArchiveHistoryEvidence(string Name, bool Readable, string? Contents, string? Error);

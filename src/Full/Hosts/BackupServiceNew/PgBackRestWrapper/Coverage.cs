@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PgBackRestWrapper;
+namespace BackupServiceNew.PgBackRestWrapper;
 
 /// <summary>Evidence collected for a backup. Unknown coverage is never a recovery guarantee.</summary>
 public sealed record CoverageAssessment(DateTimeOffset ObservedAt, string BackupLabel, string? PostgresVersion,
