@@ -35,9 +35,10 @@
   ];
 
   const sections = $derived(
-    !data.accessManagementEnabled
-      ? allSections.filter((section) => section.href !== '/admin/access-control')
-      : allSections
+    allSections.filter((section) =>
+      (data.accessManagementEnabled || section.href !== '/admin/access-control') &&
+      (!data.lite || section.href !== '/admin/backups')
+    )
   );
 
   const isActive = (href: string) =>
