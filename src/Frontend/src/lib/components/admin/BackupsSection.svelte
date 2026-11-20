@@ -30,9 +30,9 @@
   } from '#lib/api/backups.js';
 
   const backupTypeOptions = $derived([
-    { value: 'full', name: lite ? 'Full — complete SQLite snapshot' : 'Full — complete cluster backup', enabled: capabilities.full },
-    { value: 'diff', name: 'Differential — changes since the last full', enabled: capabilities.differential },
-    { value: 'incr', name: 'Incremental — changes since the latest backup', enabled: capabilities.incremental }
+    { value: 'full', name: 'Full', enabled: capabilities.full },
+    { value: 'diff', name: 'Differential', enabled: capabilities.differential },
+    { value: 'incr', name: 'Incremental', enabled: capabilities.incremental }
   ].filter((option) => option.enabled));
 
   const backupTypeNames: Record<BackupType, string> = {
@@ -41,16 +41,11 @@
     incr: 'Incremental'
   };
 
-  const backupTypeHints: Record<BackupType, string> = {
-    full: 'Copies the entire PostgreSQL cluster and initializes the stanza if needed.',
-    diff: 'Copies changes since the latest full backup. Requires a full backup.',
-    incr: 'Copies changes since the latest full, differential, or incremental backup. Requires a full backup.'
-  };
-
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
   const rowActionClass = 'btn btn-sm btn-neutral text-xs';
 
   const JOB_POLL_INTERVAL_MS = 4000;
+  const JOBS_PER_PAGE = 10;
 
   // Run backup
   let backupName = $state('');
@@ -62,6 +57,9 @@
   let jobs = $state<BackupJob[]>([]);
   let jobsLoading = $state(true);
   let jobsError = $state<string | null>(null);
+  let jobsPage = $state(0);
+  const visibleJobs = $derived(jobs.slice(jobsPage * JOBS_PER_PAGE, (jobsPage + 1) * JOBS_PER_PAGE));
+  const jobPageCount = $derived(Math.ceil(jobs.length / JOBS_PER_PAGE));
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   // Repository
@@ -126,6 +124,7 @@
     try {
       const previousActive = hasActiveJobs;
       jobs = await listBackupJobs();
+      jobsPage = Math.min(jobsPage, Math.max(0, Math.ceil(jobs.length / JOBS_PER_PAGE) - 1));
       jobsError = null;
       if (hasActiveJobs) {
         startPolling();
@@ -198,6 +197,7 @@
 
   function mergeJob(job: BackupJob) {
     jobs = [job, ...jobs.filter((item) => item.jobId !== job.jobId)];
+    jobsPage = 0;
     if (job.status === 'queued' || job.status === 'running') startPolling();
     else void loadRepository();
   }
@@ -299,7 +299,15 @@
       Run backup now
     </button>
   </form>
-  <p class="mt-2 text-xs text-base-content/50">{lite ? 'Creates and verifies a full database snapshot while the server is running.' : backupTypeHints[backupType]}</p>
+  {#if lite}
+    <p class="mt-3 text-sm text-base-content/70">Full snapshots include the complete SQLite database.</p>
+  {:else}
+    <dl class="mt-4 grid gap-2 text-sm text-base-content/70 sm:grid-cols-3">
+      {#if capabilities.full}<div><dt class="font-semibold text-base-content">Full</dt><dd>Copies the entire PostgreSQL cluster.</dd></div>{/if}
+      {#if capabilities.differential}<div><dt class="font-semibold text-base-content">Differential</dt><dd>Copies changes since the latest full backup.</dd></div>{/if}
+      {#if capabilities.incremental}<div><dt class="font-semibold text-base-content">Incremental</dt><dd>Copies changes since the latest backup.</dd></div>{/if}
+    </dl>
+  {/if}
 </section>
 
 <!-- Jobs -->
@@ -336,7 +344,7 @@
     </div>
   {:else}
     <div class="mt-5 space-y-2">
-      {#each jobs as job (job.jobId)}
+      {#each visibleJobs as job (job.jobId)}
         <article class="rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 sm:px-4">
           <div class="flex flex-wrap items-center gap-2">
             {#if job.status === 'queued' || job.status === 'running'}
@@ -375,6 +383,12 @@
         </article>
       {/each}
     </div>
+    {#if jobPageCount > 1}
+      <div class="mt-4 flex justify-end gap-2">
+        <button class="btn btn-sm btn-neutral" disabled={jobsPage === 0} onclick={() => jobsPage -= 1}>Previous</button>
+        <button class="btn btn-sm btn-neutral" disabled={jobsPage >= jobPageCount - 1} onclick={() => jobsPage += 1}>Next</button>
+      </div>
+    {/if}
   {/if}
 </section>
 
