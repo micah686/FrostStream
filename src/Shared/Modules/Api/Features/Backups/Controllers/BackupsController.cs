@@ -11,11 +11,14 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
     [HttpPost]
     [Endpoint(EndpointIds.BackupsCreate)]
     [EndpointSummary("Queue a core-data backup")]
-    [EndpointDescription("Creates a backup using the deployment adapter. Full supports PostgreSQL full/differential backups with paired OpenBao exports. Lite supports verified full SQLite snapshots of application, workflow, queue, staged-object, and encrypted-secret data. Unsupported operations return 400; media files are managed separately.")]
+    [EndpointDescription("Queues a named PostgreSQL full, differential, or incremental backup with paired OpenBao exports in Full. Lite supports verified full SQLite snapshots of application, workflow, queue, staged-object, and encrypted-secret data. Unsupported operations return 400; media files are managed separately.")]
     public async Task<ActionResult<BackupJobResponse>> Create(
         [FromBody] CreateBackupRequest? request,
         CancellationToken cancellationToken)
-        => Accepted(await backups.StartBackupAsync(request?.Name, request?.Type, cancellationToken));
+    {
+        var job = await backups.StartBackupAsync(request?.Name, request?.Type, cancellationToken);
+        return AcceptedAtAction(nameof(GetJob), new { jobId = job.JobId }, job);
+    }
 
     [HttpGet("jobs")]
     [Endpoint(EndpointIds.BackupsJobsList)]

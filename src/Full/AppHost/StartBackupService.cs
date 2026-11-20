@@ -10,7 +10,8 @@ public static class StartBackupService
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
         OpenBaoResources openBao,
-        IResourceBuilder<ParameterResource> openBaoToken)
+        IResourceBuilder<ParameterResource> openBaoToken,
+        IResourceBuilder<ParameterResource> backupApiToken)
     {
         var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
         Directory.CreateDirectory(backupRoot);
@@ -40,12 +41,14 @@ public static class StartBackupService
             .WithReference(nats).WaitFor(nats)
             .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
             .WithEnvironment("Backup__Directory", ContainerBackupRoot)
-            .WithEnvironment("Backup__Stanza", "froststream")
+            .WithEnvironment("Backup__Stanza", "main")
+            .WithEnvironment("Backup__ApiToken", backupApiToken)
             .WithEnvironment("Backup__PgDataPath", "/var/lib/postgresql/18/docker")
             .WithEnvironment("Backup__PostgresHost", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Host))
             .WithEnvironment("Backup__PostgresPort", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Port))
             .WithEnvironment("Backup__PostgresUser", postgres.User)
-            .WithEnvironment("Backup__PostgresPassword", postgres.Password)
+            .WithEnvironment("PGBACKREST_PG1_USER", postgres.User)
+            .WithEnvironment("PGPASSWORD", postgres.Password)
             .WithEnvironment("Backup__OpenBaoAddress", openBao.Server.GetEndpoint("http"))
             .WithEnvironment("Backup__OpenBaoToken", openBaoToken)
             .WithEnvironment("Backup__OpenBaoKvMount", "secret")

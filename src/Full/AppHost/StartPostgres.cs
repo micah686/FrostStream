@@ -40,28 +40,23 @@ public static class StartPostgres
             publishValueAsDefault: false,
             secret: true);
 
-        // Shared backup root: the pgBackRest repository written by the server's archive_command
-        // (archive-push) and by BackupService backups, plus the per-backup OpenBao KV exports.
-        // Made world-writable so the containers' postgres user (uid 999) can write regardless of
-        // the rootless-podman uid mapping.
         var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
-        foreach (var dir in new[]
-                 {
-                     backupRoot,
-                     BackupPaths.PgBackRestRepoDirectory(sharedStorageRoot),
-                     BackupPaths.OpenBaoExportDirectory(sharedStorageRoot),
-                 })
-        {
-            Directory.CreateDirectory(dir);
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(
-                    dir,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
-                    | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
-            }
-        }
+        Directory.CreateDirectory(backupRoot);
+
+        // Set ownership inside the container so archive-push and BackupService share access
+        // under the runtime's UID mapping, including existing development repositories.
+        var backupInit = builder
+            .AddContainer("backup-init", "docker.io/library/postgres", "18.3")
+            .WithEntrypoint("/bin/bash")
+            .WithArgs("-ec", """
+                umask 077
+                cd /backups
+                mkdir -p pgbackrest openbao wrapper-state/pgbackrest-lock
+                chown postgres:postgres .
+                chown -R postgres:postgres pgbackrest openbao wrapper-state
+                chmod 700 . pgbackrest openbao wrapper-state wrapper-state/pgbackrest-lock
+                """.ReplaceLineEndings("\n"))
+            .WithPortableBindMount(backupRoot, "${FROSTSTREAM_BACKUP_ROOT:-./backups}", "/backups");
 
         var postgresConf = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "postgresql.conf");
         var postgresHba = Path.Combine(builder.AppHostDirectory, "configs", "postgres", "pg_hba.conf");
@@ -86,6 +81,7 @@ public static class StartPostgres
             .WithPortableBindMount(pgBackRestConf, "../../Full/AppHost/configs/pgbackrest/pgbackrest.conf", "/etc/pgbackrest/pgbackrest.conf", isReadOnly: true)
             .WithPortableBindMount(backupRoot, "${FROSTSTREAM_BACKUP_ROOT:-./backups}", "/backups")
             .WithArgs("-c", "config_file=/etc/postgresql/postgresql.conf")
+            .WaitForCompletion(backupInit)
             .WithPackagedLimits("2g", "2");
 
         // The toolkit's DbGate resource never makes it into the compose publish, and its "dbgate"
@@ -133,21 +129,7 @@ public static class StartPostgres
                 };
             });
 
-            // The compose bind-mounted ./backups directory is created root-owned on first start,
-            // but archive_command (postgres container) and BackupService both write to it as
-            // uid 999. One-shot ownership fix; postgres gates on its completion. Run mode covers
-            // this with the host-side chmod above instead.
-            var backupInit = builder
-                .AddContainer("backup-init", "docker.io/library/postgres", "18.3")
-                .WithEntrypoint("/bin/bash")
-                .WithArgs("-c", "umask 077; mkdir -p /backups/pgbackrest /backups/openbao /backups/jobs && chmod 700 /backups /backups/pgbackrest /backups/openbao /backups/jobs && chown -R 999:999 /backups && echo 'backup-init: done'")
-                .WithPortableBindMount(
-                    backupRoot,
-                    "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
-                    "/backups");
-            server
-                .WaitForCompletion(backupInit)
-                .WithComposeDependencyCondition("backup-init", "service_completed_successfully");
+            server.WithComposeDependencyCondition("backup-init", "service_completed_successfully");
 
             // WithDbGate (run mode, above) is excluded from the compose publish by the community
             // toolkit, so publish a plain dbgate container with the same connection wiring.

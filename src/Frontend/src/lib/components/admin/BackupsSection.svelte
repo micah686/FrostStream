@@ -27,13 +27,21 @@
   } from '#lib/api/backups.js';
 
   const backupTypeOptions = $derived([
-    { value: 'full' as BackupType, name: lite ? 'Full — complete SQLite snapshot' : 'Full — complete cluster backup' },
-    { value: 'diff' as BackupType, name: 'Differential — changes since the last full' }
-  ].filter((option) => option.value === 'full' ? capabilities.full : capabilities.differential));
+    { value: 'full', name: lite ? 'Full — complete SQLite snapshot' : 'Full — complete cluster backup', enabled: capabilities.full },
+    { value: 'diff', name: 'Differential — changes since the last full', enabled: capabilities.differential },
+    { value: 'incr', name: 'Incremental — changes since the latest backup', enabled: capabilities.incremental }
+  ].filter((option) => option.enabled));
+
+  const backupTypeNames: Record<BackupType, string> = {
+    full: 'Full',
+    diff: 'Differential',
+    incr: 'Incremental'
+  };
 
   const backupTypeHints: Record<BackupType, string> = {
-    full: 'Complete pgBackRest cluster backup plus an OpenBao secrets export. The weekly schedule takes one every Sunday.',
-    diff: 'Only what changed since the last full backup — fast and small. Requires at least one full backup. The daily schedule takes one every night.'
+    full: 'Copies the entire PostgreSQL cluster and initializes the stanza if needed.',
+    diff: 'Copies changes since the latest full backup. Requires a full backup.',
+    incr: 'Copies changes since the latest full, differential, or incremental backup. Requires a full backup.'
   };
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
@@ -189,7 +197,7 @@
   function describeKind(job: BackupJob): string {
     switch (job.kind) {
       case 'backup':
-        return job.type === 'diff' ? 'diff backup' : 'full backup';
+        return job.type ? `${backupTypeNames[job.type]} backup` : 'Backup';
       case 'verify-quick':
         return 'quick verify';
       case 'verify-deep':
@@ -250,8 +258,8 @@
 
   <form onsubmit={runBackup} class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
     <div class="min-w-0 flex-1 sm:max-w-xs">
-      <label class="label mb-2 text-sm" for="backup-name">Backup name (optional)</label>
-      <input class="input w-full" id="backup-name" maxlength={100} bind:value={backupName} placeholder="pre-upgrade" />
+      <label class="label mb-2 text-sm" for="backup-name">{lite ? 'Backup name (optional)' : 'Backup name'}</label>
+      <input class="input w-full" id="backup-name" maxlength={lite ? 100 : 128} required={!lite} bind:value={backupName} placeholder="pre-upgrade" />
     </div>
     <div class="min-w-0 flex-1 sm:max-w-sm">
       <label class="label mb-2 text-sm" for="backup-type">Type</label>
@@ -318,7 +326,7 @@
             {#if job.name}
               <span class="truncate text-xs font-semibold text-base-content/80">{job.name}</span>
             {/if}
-            <span class="text-xs text-base-content/60">Started {formatDate(job.createdAt)}</span>
+            <span class="text-xs text-base-content/60">{job.startedAt ? 'Started' : 'Queued'} {formatDate(job.startedAt ?? job.createdAt)}</span>
             {#if job.completedAt}
               <span class="text-xs text-base-content/50">· finished {formatDate(job.completedAt)}</span>
             {/if}
@@ -327,8 +335,17 @@
           {#if job.label}
             <p class="mt-2 truncate font-mono text-xs text-base-content/60" title={job.label}>{job.label}</p>
           {/if}
+          {#if job.actualType && job.actualType !== job.type}
+            <p class="mt-2 text-xs text-base-content/70">Created a {backupTypeNames[job.actualType].toLowerCase()} backup.</p>
+          {/if}
           {#if job.errorMessage}
             <p class="mt-2 text-xs text-error">{job.errorMessage}</p>
+          {/if}
+          {#if job.progress.length}
+            <details class="mt-2 text-xs text-base-content/70">
+              <summary class="cursor-pointer">Job output</summary>
+              <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words">{job.progress.join('\n')}</pre>
+            </details>
           {/if}
         </article>
       {/each}
@@ -395,9 +412,9 @@
           {repository.statusMessage || 'Repository healthy.'}
           {#if capabilities.pointInTimeRecovery}
           {#if repository.pitrWindow.earliest}
-            Point-in-time recovery covers {formatDate(repository.pitrWindow.earliest)} → now.
+            Earliest point-in-time recovery estimate is {formatDate(repository.pitrWindow.earliest)}.
           {:else}
-            Point-in-time recovery becomes available after the first full backup.
+            Point-in-time recovery coverage is unknown.
           {/if}
           {/if}
         </span>
@@ -433,7 +450,7 @@
                     {backup.label}
                   </h3>
                   <span class="badge badge-sm badge-accent text-[10px] font-semibold text-accent-content">
-                    {backup.type}
+                    {backupTypeNames[backup.type] ?? backup.type}
                   </span>
                   {#if backup.name}
                     <span class="badge badge-sm badge-neutral text-[10px] font-semibold">{backup.name}</span>
@@ -494,8 +511,7 @@
       <p class="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">
         Restores run from the standalone restore console, which works while the rest of FrostStream (including sign-in)
         is down. Stop the <code class="font-mono text-xs">postgres</code> container first, then open the console and
-        follow the guided steps — it supports restoring a specific backup or point-in-time recovery to any moment in
-        the window shown above. The console is protected by the deployment's restore token.
+        follow the guided steps for backup or point-in-time recovery. The console is protected by the deployment's restore token.
       </p>
       <a class="btn btn-sm btn-neutral mt-4 text-xs" href={restoreUiUrl} target="_blank" rel="noreferrer noopener">
         Open the restore console

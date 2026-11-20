@@ -10,7 +10,7 @@ namespace UnitTests.Backups;
 public sealed class BackupJobServiceTests
 {
     [Test]
-    public async Task Full_Retains_Differential_And_Deep_Verification_And_Rejects_Unknown_Types_Before_Dispatch()
+    public async Task Full_Normalizes_Backup_Types_And_Rejects_Invalid_Requests_Before_Dispatch()
     {
         var client = Substitute.For<IBackupServiceClient>();
         var capabilities = SystemCapabilities.Resolve(new(DeploymentMode.Full), new ConfigurationBuilder().Build());
@@ -22,9 +22,25 @@ public sealed class BackupJobServiceTests
 
         (await service.StartBackupAsync("test", " DIFF ", CancellationToken.None)).JobId.ShouldBe(job.JobId);
         await client.Received(1).CreateAsync(Arg.Is<CreateBackupJobRequest>(request => request.Type == "diff"), CancellationToken.None);
+        await service.StartBackupAsync(" weekly ", " Differential ", CancellationToken.None);
+        await client.Received(1).CreateAsync(new CreateBackupJobRequest("weekly", "diff"), CancellationToken.None);
+        await service.StartBackupAsync(" nightly ", " Incremental ", CancellationToken.None);
+        await client.Received(1).CreateAsync(new CreateBackupJobRequest("nightly", "incr"), CancellationToken.None);
         await service.VerifyAsync("label", true, CancellationToken.None);
         await client.Received(1).VerifyAsync(new VerifyBackupRequest("label", true), CancellationToken.None);
         await Should.ThrowAsync<NotSupportedException>(() => service.StartBackupAsync(null, "pitr", CancellationToken.None));
-        await client.Received(1).CreateAsync(Arg.Any<CreateBackupJobRequest>(), Arg.Any<CancellationToken>());
+        await Should.ThrowAsync<ArgumentException>(() => service.StartBackupAsync(" ", "full", CancellationToken.None));
+        await client.Received(3).CreateAsync(Arg.Any<CreateBackupJobRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Lite_Rejects_Incremental_Before_Dispatch()
+    {
+        var client = Substitute.For<IBackupServiceClient>();
+        var capabilities = SystemCapabilities.Resolve(new(DeploymentMode.Lite), new ConfigurationBuilder().Build());
+        var service = new BackupJobService(client, capabilities);
+
+        await Should.ThrowAsync<NotSupportedException>(() => service.StartBackupAsync("test", "incr", CancellationToken.None));
+        await client.DidNotReceive().CreateAsync(Arg.Any<CreateBackupJobRequest>(), Arg.Any<CancellationToken>());
     }
 }

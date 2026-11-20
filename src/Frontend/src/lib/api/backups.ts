@@ -1,6 +1,6 @@
 export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
-export type BackupType = 'full' | 'diff';
+export type BackupType = 'full' | 'diff' | 'incr';
 
 export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore';
 
@@ -8,11 +8,14 @@ export interface BackupJob {
   jobId: string;
   kind: BackupJobKind;
   type: BackupType | null;
+  actualType?: BackupType | null;
+  backup?: BackupInfo | null;
   status: BackupJobStatus;
   name: string | null;
   label: string | null;
   errorMessage: string | null;
   createdAt: string;
+  startedAt?: string | null;
   completedAt: string | null;
   progress: string[];
 }
@@ -30,6 +33,7 @@ export interface BackupInfo {
   hasError: boolean;
   openBaoExportPresent: boolean;
   keyRingBackupPresent?: boolean | null;
+  dependencies?: string[] | null;
 }
 
 export interface PitrWindow {

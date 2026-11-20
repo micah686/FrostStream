@@ -11,11 +11,20 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
         string? type,
         CancellationToken cancellationToken)
     {
-        type = type?.Trim().ToLowerInvariant() ?? "full";
-        if (!(type == "full" && capabilities.Backups.Full || type == "diff" && capabilities.Backups.Differential))
+        type = BackupTypes.Normalize(type);
+        var supported = type switch
+        {
+            BackupTypes.Full => capabilities.Backups.Full,
+            BackupTypes.Differential => capabilities.Backups.Differential,
+            BackupTypes.Incremental => capabilities.Backups.Incremental,
+            _ => false
+        };
+        if (!supported)
             throw new NotSupportedException(capabilities.Backups.Provider == "SQLite"
-                ? "Lite supports full SQLite snapshots only; differential and point-in-time backups are not supported."
+                ? "Lite supports full SQLite snapshots only."
                 : $"Backup type '{type}' is not supported in this deployment.");
+        if (capabilities.Backups.Provider == "PostgreSQL")
+            name = BackupTypes.ValidateName(name);
         return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
     }
 
@@ -31,11 +40,7 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
         return new BackupRepositoryResponse(
             repository.RepositoryOk,
             repository.StatusMessage,
-            repository.Backups
-                .Select(x => new BackupSummaryResponse(
-                    x.Label, x.Type, x.Name, x.StartedAt, x.CompletedAt, x.DatabaseSize, x.RepositorySize,
-                    x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent, x.KeyRingBackupPresent))
-                .ToArray(),
+            repository.Backups.Select(ToResponse).ToArray(),
             new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox),
             repository.DatabasePath, repository.BackupDirectory, repository.KeyRingPath);
     }
@@ -55,5 +60,19 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
     private static BackupJobResponse ToResponse(BackupJobDto job)
         => new(
             job.JobId, job.Kind, job.Type, job.Status, job.Name, job.Label,
-            job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress);
+            job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress)
+        {
+            ActualType = job.ActualType,
+            StartedAt = job.StartedAt,
+            Backup = job.Backup is { } backup ? ToResponse(backup) : null
+        };
+
+    private static BackupSummaryResponse ToResponse(BackupInfoDto backup)
+        => new(
+            backup.Label, backup.Type, backup.Name, backup.StartedAt, backup.CompletedAt, backup.DatabaseSize,
+            backup.RepositorySize, backup.WalStart, backup.WalStop, backup.HasError, backup.OpenBaoExportPresent,
+            backup.KeyRingBackupPresent)
+        {
+            Dependencies = backup.Dependencies
+        };
 }

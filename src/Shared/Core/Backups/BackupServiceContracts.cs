@@ -19,7 +19,12 @@ public sealed record BackupJobDto(
     string? ErrorMessage,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<string> Progress);
+    IReadOnlyList<string> Progress)
+{
+    public string? ActualType { get; init; }
+    public BackupInfoDto? Backup { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+}
 
 /// <summary>One backup in the pgBackRest repository (from `pgbackrest info`).</summary>
 public sealed record BackupInfoDto(
@@ -34,7 +39,10 @@ public sealed record BackupInfoDto(
     string? WalStop,
     bool HasError,
     bool OpenBaoExportPresent,
-    bool? KeyRingBackupPresent = null);
+    bool? KeyRingBackupPresent = null)
+{
+    public IReadOnlyList<string>? Dependencies { get; init; }
+}
 
 public sealed record PitrWindowDto(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
 

@@ -14,10 +14,11 @@ public sealed class QuartzJobRegistrar(ILogger<QuartzJobRegistrar> logger, Share
 {
     public async Task RegisterAsync(IScheduler scheduler, ScheduledTaskDto task, CancellationToken cancellationToken = default)
     {
-        if (task.TaskType == TaskTypeRegistry.BackupDiff && capabilities?.Backups.Differential == false)
+        if (task.TaskType == TaskTypeRegistry.BackupDiff && capabilities?.Backups.Differential == false
+            || task.TaskType == TaskTypeRegistry.BackupIncr && capabilities?.Backups.Incremental == false)
         {
             await DeleteAsync(scheduler, task.Key, cancellationToken);
-            logger.LogInformation("Skipping unsupported differential backup schedule {ScheduleKey}.", task.Key);
+            logger.LogInformation("Skipping unsupported backup schedule {ScheduleKey} ({TaskType}).", task.Key, task.TaskType);
             return;
         }
         if (!TaskTypeRegistry.TryGetJobType(task.TaskType, out _))

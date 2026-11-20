@@ -18,10 +18,10 @@ COPY src/Shared/Integrations/StorageExtensions/ src/Shared/Integrations/StorageE
 COPY src/Shared/Hosting/ServiceDefaults/ src/Shared/Hosting/ServiceDefaults/
 COPY src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/ src/Shared/Integrations/Vendor/Conduit.NATS/Conduit.NATS/
 COPY src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/ src/Shared/Integrations/Vendor/YtDlpSharpLib/YtDlpSharpLib/
+COPY src/Full/Hosts/BackupService/BackupEngine/ src/Full/Hosts/BackupService/BackupEngine/
+COPY src/Full/Hosts/BackupService/BackupServiceOptions.cs src/Full/Hosts/BackupService/
+COPY src/Full/Hosts/BackupService/PgBackRest/OpenBaoPairing.cs src/Full/Hosts/BackupService/PgBackRest/
 COPY src/Full/Hosts/BackupServiceNew/ src/Full/Hosts/BackupServiceNew/
-# No --no-restore: this project's Razor components pull in Static Web Assets (blazor.web.js),
-# and that pipeline needs a restore pass with the real source present — the earlier csproj-only
-# restore (kept for Docker layer caching on the NuGet fetch) leaves its manifest empty otherwise.
 RUN dotnet publish src/Full/Hosts/BackupServiceNew/BackupServiceNew.csproj -c Release -o /app
 
 # Base on the matching PostgreSQL image so pgbackrest, pg_ctl, psql, and pg_isready are

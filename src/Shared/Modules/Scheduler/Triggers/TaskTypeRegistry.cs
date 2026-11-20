@@ -16,6 +16,7 @@ internal static class TaskTypeRegistry
     public const string ImportSessionCleanup = "import_session_cleanup";
     public const string BackupFull = "backup-full";
     public const string BackupDiff = "backup-diff";
+    public const string BackupIncr = "backup-incr";
 
     private static readonly IReadOnlyDictionary<string, Type> JobTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
     {
@@ -29,7 +30,8 @@ internal static class TaskTypeRegistry
         [DownloadHistoryCleanup] = typeof(DownloadHistoryCleanupJob),
         [ImportSessionCleanup] = typeof(ImportSessionCleanupJob),
         [BackupFull] = typeof(BackupJob),
-        [BackupDiff] = typeof(BackupJob)
+        [BackupDiff] = typeof(BackupJob),
+        [BackupIncr] = typeof(BackupJob)
     };
 
     public static bool TryGetJobType(string taskType, out Type jobType)

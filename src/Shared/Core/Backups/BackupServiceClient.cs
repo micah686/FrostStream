@@ -5,6 +5,8 @@ namespace Shared.Backups;
 
 public sealed class BackupServiceClient(HttpClient httpClient) : IBackupServiceClient
 {
+    public const string ApiTokenHeader = "X-FrostStream-Backup-Token";
+
     public async Task<BackupJobDto> CreateAsync(
         CreateBackupJobRequest request,
         CancellationToken cancellationToken = default)

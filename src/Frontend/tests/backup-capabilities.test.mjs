@@ -22,22 +22,24 @@ try {
   const { render } = await server.ssrLoadModule('svelte/server');
   test('shared backup page presents SQLite recovery and supported operations in Lite', () => {
     page.data = { lite: true, capabilities: { backups: {
-      full: true, differential: false, verification: true, deepVerification: false, pointInTimeRecovery: false
+      full: true, differential: false, incremental: false, verification: true, deepVerification: false, pointInTimeRecovery: false
     } } };
     const { body } = render(Backups);
     assert.match(body, /complete SQLite snapshot/);
     assert.doesNotMatch(body, /<option[^>]*value="diff"/);
+    assert.doesNotMatch(body, /<option[^>]*value="incr"/);
     assert.match(body, /Shut down the Lite server/);
     assert.match(body, /retaining all older keys/);
     assert.doesNotMatch(body, /Open the restore console/);
   });
-  test('shared backup page retains differential backups and the recovery console in Full', () => {
+  test('shared backup page offers Full, Differential, and Incremental in Full', () => {
     page.data = { lite: false, capabilities: { backups: {
-      full: true, differential: true, verification: true, deepVerification: true, pointInTimeRecovery: true
+      full: true, differential: true, incremental: true, verification: true, deepVerification: true, pointInTimeRecovery: true
     } } };
     const { body } = render(Backups);
     assert.match(body, /complete cluster backup/);
     assert.match(body, /<option[^>]*value="diff"/);
+    assert.match(body, /<option[^>]*value="incr"/);
     assert.match(body, /Open the restore console/);
     assert.doesNotMatch(body, /Shut down the Lite server/);
   });
