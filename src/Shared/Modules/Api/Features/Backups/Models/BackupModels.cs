@@ -14,6 +14,7 @@ public sealed record BackupJobResponse(
     DateTimeOffset? CompletedAt,
     IReadOnlyList<string> Progress)
 {
+    public string? ResultSummary { get; init; }
     public string? ActualType { get; init; }
     public BackupSummaryResponse? Backup { get; init; }
     public DateTimeOffset? StartedAt { get; init; }

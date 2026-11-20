@@ -4,7 +4,7 @@
   const capabilities = $derived(page.data.capabilities.backups);
   const lite = $derived(page.data.lite);
   const deepVerification = $derived(capabilities.deepVerification ?? capabilities.pointInTimeRecovery);
-  import { Select } from '#lib/components/ui/index.js';
+  import { Modal, Select } from '#lib/components/ui/index.js';
   import {
     CircleAlert,
     CircleCheck,
@@ -75,6 +75,12 @@
   let health = $state<BackupHealth | null>(null);
   let healthError = $state<string | null>(null);
   let maintenanceBusy = $state(false);
+  let deepVerifyModalOpen = $state(false);
+  let selectedVerifyBackup = $state<BackupInfo | null>(null);
+  let backupsPage = $state(0);
+  const sortedBackups = $derived([...(repository?.backups ?? [])].reverse());
+  const backupPageCount = $derived(Math.ceil(sortedBackups.length / JOBS_PER_PAGE));
+  const visibleBackups = $derived(sortedBackups.slice(backupsPage * JOBS_PER_PAGE, (backupsPage + 1) * JOBS_PER_PAGE));
 
   async function loadHealth() {
     if (lite) return;
@@ -82,12 +88,61 @@
     catch (err) { healthError = err instanceof Error ? err.message : 'Could not load backup health.'; }
   }
 
-  async function runMaintenance(operation: 'check' | 'expire' | 'inspect-archive') {
-    if (operation === 'expire' && !window.confirm('Expire backups according to the configured retention policy?')) return;
+  async function runMaintenance(operation: 'check' | 'inspect-archive') {
     maintenanceBusy = true;
     try { mergeJob(await runBackupMaintenance(operation)); healthError = null; }
     catch (err) { healthError = err instanceof Error ? err.message : 'Could not start maintenance.'; }
     finally { maintenanceBusy = false; }
+  }
+
+  const recentRepositoryChecks = $derived([
+    { name: 'Repository verification', operation: 'verify' as const, description: lite ? 'Checks the latest SQLite snapshot, its integrity and recovery artifacts.' : 'Quick verify checks backup and archive checksums across the pgBackRest repository. Deep verify on a saved backup also performs a temporary restore.', job: jobs.find((job) => job.kind === 'verify-quick') },
+    ...(!lite ? [
+      { name: 'Archive check', operation: 'check' as const, description: 'Checks pgBackRest configuration and asks PostgreSQL to archive WAL, confirming the current archive path works.', job: jobs.find((job) => job.kind === 'check') },
+      { name: 'WAL inspection', operation: 'inspect-archive' as const, description: 'Retrieves archived WAL segments and timeline history, reporting unreadable files and gaps within the observed range. This can take a long time. Recovery target reachability remains unassessed.', job: jobs.find((job) => job.kind === 'inspect-archive') }
+    ] : [])
+  ]);
+  const backupIssues = $derived(repository?.backups.filter((backup) =>
+    backup.hasError || (lite ? backup.keyRingBackupPresent === false : !backup.openBaoExportPresent)).length ?? 0);
+  const walState = $derived.by(() => {
+    if (!health || healthError || !health.archiverStatistics) return 'Unknown';
+    try {
+      const stats = JSON.parse(health.archiverStatistics);
+      if (typeof stats.failure_unresolved !== 'boolean' || typeof stats.archive_mode !== 'string') return 'Unknown';
+      return stats.failure_unresolved || stats.archive_mode === 'off' || stats.archive_timeout === '0'
+        ? 'Needs attention' : 'Archiving enabled';
+    } catch { return 'Unknown'; }
+  });
+  const repositoryStatuses = $derived([
+    {
+      name: 'Overall health',
+      description: 'Combines repository availability, recovery artifact issues, free space and PostgreSQL archiver health. Observed ' + (health ? formatDate(health.observedAt) : 'health snapshot pending') + '.',
+      state: repositoryError || healthError ? 'Unavailable' : !repository || (!lite && !health) ? 'Unknown'
+        : !repository.repositoryOk || backupIssues > 0 || (!lite && !health?.healthy) ? 'Needs attention' : 'Healthy',
+      detail: lite ? 'Repository and recovery artifacts' : 'Repository, storage and archiver health'
+    },
+    {
+      name: 'Backups',
+      description: 'Shows saved backups and reports backup errors or missing recovery artifacts. Checksum verification results appear in the repository verification card.',
+      state: repositoryError || !repository ? 'Unknown' : !repository.repositoryOk || backupIssues > 0 ? 'Needs attention'
+        : repository.backups.length ? 'Available' : 'No backups',
+      detail: repository ? repository.backups.length + ' saved · ' + backupIssues + ' with reported issues' : 'Waiting for repository'
+    },
+    ...(!lite ? [{
+      name: 'WAL archiving', description: 'Shows current PostgreSQL archiver settings and unresolved failures. The backlog counts WAL segments waiting to be archived.', state: walState,
+      detail: health ? health.walReadySegments + ' segments awaiting archival' : 'Waiting for archiver statistics'
+    }] : []),
+    ...(capabilities.pointInTimeRecovery ? [{
+      name: 'PITR coverage', description: 'Point-in-time recovery coverage requires assessment of WAL continuity and recovery target reachability. A recovery window estimate alone leaves coverage unknown.', state: 'Unknown',
+      detail: repository?.pitrWindow.earliest ? 'Estimated start ' + formatDate(repository.pitrWindow.earliest)
+        : 'Recovery window has not been established'
+    }] : [])
+  ]);
+
+  function statusColor(state: string) {
+    if (['Healthy', 'Available', 'Archiving enabled'].includes(state)) return 'badge-success';
+    if (['Needs attention', 'Unavailable'].includes(state)) return 'badge-warning';
+    return 'badge-neutral';
   }
 
   let restoreUiUrl = $state('');
@@ -149,6 +204,7 @@
     repositoryError = null;
     try {
       repository = await listBackups();
+      backupsPage = Math.min(backupsPage, Math.max(0, Math.ceil(repository.backups.length / JOBS_PER_PAGE) - 1));
     } catch (err) {
       repositoryError = err instanceof Error ? err.message : 'Could not load the backup repository.';
     } finally {
@@ -184,15 +240,32 @@
   }
 
   async function runDeepVerify(backup: BackupInfo) {
+    if (verificationState(backup).name === 'Processing') return;
     deepVerifyBusyLabel = backup.label;
     verifyError = null;
     try {
       mergeJob(await verifyBackup(backup.label, deepVerification));
+      deepVerifyModalOpen = false;
     } catch (err) {
       verifyError = err instanceof Error ? err.message : 'Could not start the deep verification.';
     } finally {
       deepVerifyBusyLabel = null;
     }
+  }
+
+  function verificationState(backup: BackupInfo) {
+    const checks = jobs.filter((job) => job.label === backup.label &&
+      job.kind === (deepVerification ? 'verify-deep' : 'verify-quick'));
+    if (deepVerifyBusyLabel === backup.label || checks.some((job) => job.status === 'queued' || job.status === 'running')) {
+      return { name: 'Processing', color: 'badge-info', description: 'Verification is queued or running.' };
+    }
+    if (backup.hasError || checks[0]?.status === 'failed') {
+      return { name: 'Invalid', color: 'badge-error', description: checks[0]?.errorMessage ?? 'The backup reports an error.' };
+    }
+    if (checks[0]?.status === 'completed') {
+      return { name: 'OK', color: 'badge-success', description: 'Last verification passed ' + formatDate(checks[0].completedAt) };
+    }
+    return { name: 'Unknown', color: 'badge-neutral', description: 'No completed verification recorded for this backup.' };
   }
 
   function mergeJob(job: BackupJob) {
@@ -394,91 +467,107 @@
 
 <!-- Repository -->
 <section class={cardClass} aria-labelledby="backups-repo-title">
-  <div class="flex items-start justify-between gap-2">
+  <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h2 id="backups-repo-title" class="text-base font-bold text-base-content">Backup repository</h2>
-      <p class="mt-2 text-sm text-base-content/60">
-        {#if lite}
-          SQLite recovery sets include a database snapshot, its complete encryption key ring, and a checksum manifest. Verify checks checksums, database integrity, and encrypted-secret recovery.
-        {:else}
-          Backups in the pgBackRest repository. Quick verify checks every checksum in the repository; deep verify
-          test-restores one backup and checks the data inside it.
-        {/if}
-      </p>
-    </div>
-    <div class="flex shrink-0 gap-2">
-      <button class="btn btn-sm btn-neutral" disabled={quickVerifyBusy || !capabilities.verification || (lite && !repository?.backups.length)} onclick={() => void runQuickVerify()}>
-        {#if quickVerifyBusy}
-          <span class="loading loading-spinner loading-xs mr-1.5"></span>
-        {:else}
-          <ShieldCheck class="mr-1.5 h-3.5 w-3.5" />
-        {/if}
-        {lite ? 'Verify latest' : 'Quick verify'}
-      </button>
-      <button class="btn btn-sm btn-neutral" disabled={repositoryLoading} onclick={() => void loadRepository()}>
-        <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
-        Refresh
-      </button>
+      <p class="mt-1 text-sm text-base-content/60">Recovery status and saved backups</p>
     </div>
   </div>
 
-  {#if !lite}
-    <div class="mt-5 flex flex-wrap gap-2">
-      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('check')}>Check archiving</button>
-      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('inspect-archive')}>Inspect archived WAL</button>
-      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('expire')}>Expire backups</button>
-      <button class="btn btn-sm btn-neutral" onclick={() => void loadHealth()}>Refresh health</button>
-    </div>
-    {#if healthError}<p class="mt-3 text-sm text-error" role="alert">{healthError}</p>{/if}
-    {#if health}
-      <div class="mt-3 text-sm" role="status">
-        <p>{health.healthy ? 'Backup health: healthy' : 'Backup health needs attention'} · {health.walReadySegments} WAL segments awaiting archival</p>
-        <p>Repository free: {formatSize(health.repositoryFreeBytes)} · Database free: {formatSize(health.dataFreeBytes)} · Observed {formatDate(health.observedAt)}</p>
-        {#each health.problems as problem}<p class="text-error">{problem}</p>{/each}
-      </div>
-    {/if}
-  {/if}
-
-  {#if repositoryError}
-    <div class="alert alert-error mt-5 text-sm" role="alert">
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{repositoryError}</span>
-    </div>
-  {/if}
-  {#if verifyError}
-    <div class="alert alert-error mt-5 text-sm" role="alert">
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{verifyError}</span>
-    </div>
-  {/if}
-
-  {#if repository}
-    <div
-      class={[
-        'mt-5 flex items-start gap-2 rounded-field border p-3 text-xs',
-        repository.repositoryOk
-          ? 'border-info/30 bg-info/10 text-info-content'
-          : 'border-error/30 bg-error/10 text-error-content'
-      ]}
-      role="status"
-    >
-      {#if repository.repositoryOk}
-        <CircleCheck class="mt-0.5 h-4 w-4 shrink-0" />
-        <span>
-          {repository.statusMessage || 'Repository healthy.'}
-          {#if capabilities.pointInTimeRecovery}
-          {#if repository.pitrWindow.earliest}
-            Earliest point-in-time recovery estimate is {formatDate(repository.pitrWindow.earliest)}.
+  <div class="mt-5 grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite">
+    {#each repositoryStatuses as status, index (status.name)}
+      <article class="flex min-h-64 min-w-0 flex-col rounded-field border-[length:var(--border)] border-base-300 bg-base-200/30 p-4">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-base-content">{status.name}</h3>
+          <div class="group relative">
+            <button type="button" class="grid h-5 w-5 place-items-center rounded-full border border-base-content/30 text-xs text-base-content/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={'About ' + status.name} aria-describedby={'status-help-' + index}>?</button>
+            <span id={'status-help-' + index} role="tooltip" class="invisible absolute right-0 top-7 z-20 w-56 rounded-field border border-base-300 bg-base-100 p-3 text-xs font-normal text-base-content shadow-lg group-hover:visible group-focus-within:visible">{status.description}</span>
+          </div>
+        </div>
+        <div class="mt-3">
+          <span class="badge badge-sm {statusColor(status.state)}">{status.state}</span>
+          <p class="mt-2 text-xs text-base-content/70">{status.detail}</p>
+        </div>
+        {#if status.name !== 'PITR coverage'}
+          <div class="mt-auto pt-4">
+            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={repositoryLoading} onclick={() => {
+              if (status.name !== 'WAL archiving') void loadRepository();
+              if (status.name !== 'Backups') void loadHealth();
+            }}>
+              <RefreshCw class="h-3.5 w-3.5 shrink-0" />Refresh status
+            </button>
+          </div>
+        {/if}
+      </article>
+    {/each}
+    {#each recentRepositoryChecks as check (check.name)}
+      <article class="flex min-h-64 min-w-0 flex-col rounded-field border-[length:var(--border)] border-base-300 bg-base-200/30 p-4">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-base-content">{check.name}</h3>
+          <div class="group relative">
+            <button type="button" class="grid h-5 w-5 place-items-center rounded-full border border-base-content/30 text-xs text-base-content/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={'About ' + check.name} aria-describedby={'check-help-' + check.operation}>?</button>
+            <span id={'check-help-' + check.operation} role="tooltip" class="invisible absolute right-0 top-7 z-20 w-56 rounded-field border border-base-300 bg-base-100 p-3 text-xs font-normal text-base-content shadow-lg group-hover:visible group-focus-within:visible">{check.description}</span>
+          </div>
+        </div>
+        <div class="mt-3">
+          <span class="badge badge-sm {check.job ? statusBadgeClass(check.job.status) : 'badge-neutral'}">{check.job?.status ?? 'Not run'}</span>
+          {#if check.job}
+            <p class="mt-2 text-xs text-base-content/50">{check.job.completedAt ? 'Finished' : 'Queued'} {formatDate(check.job.completedAt ?? check.job.createdAt)}</p>
+            {#if check.job.errorMessage}<p class="mt-2 break-words text-xs text-error">{check.job.errorMessage}</p>{/if}
+            <p class="mt-3 break-words text-xs text-base-content/70">
+              {check.job.status === 'completed'
+                ? check.job.resultSummary ?? 'Check completed. Run it again to get a result summary.'
+                : check.job.status === 'running' ? 'Check in progress…'
+                : check.job.status === 'queued' ? 'Waiting to start.'
+                : 'The check could not complete. Review the error and job output.'}
+            </p>
           {:else}
-            Point-in-time recovery coverage is unknown.
+            <p class="mt-2 text-xs text-base-content/50">No check recorded yet.</p>
           {/if}
+        </div>
+        <div class="mt-auto pt-4">
+          {#if check.operation === 'verify'}
+            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={quickVerifyBusy || !capabilities.verification || (lite && !repository?.backups.length)} onclick={() => void runQuickVerify()}>
+              {#if quickVerifyBusy}<span class="loading loading-spinner loading-xs"></span>{:else}<ShieldCheck class="h-3.5 w-3.5" />{/if}
+              {lite ? 'Verify latest' : 'Quick verify'}
+            </button>
+          {:else}
+            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance(check.operation)}>
+              {check.operation === 'check' ? 'Check archiving' : 'Inspect archived WAL'}
+            </button>
           {/if}
-        </span>
-      {:else}
-        <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{repository.statusMessage || 'The backup repository is not healthy.'}</span>
-      {/if}
+        </div>
+      </article>
+    {/each}
+  </div>
+
+  {#if repositoryError || healthError || verifyError}
+    <div class="alert alert-error mt-4 text-sm" role="alert">
+      <CircleAlert class="h-4 w-4 shrink-0" />
+      <div>
+        {#if repositoryError}<p>{repositoryError}</p>{/if}
+        {#if healthError}<p>{healthError}</p>{/if}
+        {#if verifyError}<p>{verifyError}</p>{/if}
+      </div>
     </div>
+  {/if}
+
+  {#if repository?.statusMessage || (!lite && health)}
+    <details class="mt-4 rounded-field border-[length:var(--border)] border-base-300 p-3 text-xs text-base-content/70">
+      <summary class="cursor-pointer font-semibold">Health details</summary>
+      {#if repository?.statusMessage}<p class="mt-3">{repository.statusMessage}</p>{/if}
+      {#if !lite && health}
+        <dl class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+          <div><dt class="text-base-content/50">Repository free space</dt><dd class="mt-1">{formatSize(health.repositoryFreeBytes)}</dd></div>
+          <div><dt class="text-base-content/50">Database free space</dt><dd class="mt-1">{formatSize(health.dataFreeBytes)}</dd></div>
+        </dl>
+        {#if health.problems.length}
+          <ul class="mt-3 list-inside list-disc space-y-1 text-warning">
+            {#each health.problems as problem}<li>{problem}</li>{/each}
+          </ul>
+        {/if}
+      {/if}
+    </details>
   {/if}
 
   {#if repositoryLoading}
@@ -493,7 +582,8 @@
     </div>
   {:else}
     <div class="mt-5 space-y-2">
-      {#each [...repository.backups].reverse() as backup (backup.label)}
+      {#each visibleBackups as backup (backup.label)}
+        {@const verification = verificationState(backup)}
         <article class="rounded-field border-[length:var(--border)] border-base-content/20 bg-base-100 px-3 py-3 transition hover:border-base-content/30 sm:px-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex min-w-0 items-center gap-3">
@@ -533,14 +623,21 @@
               </div>
             </div>
 
-            <div class="flex shrink-0 flex-wrap gap-2 sm:ml-auto">
+            <div class="flex shrink-0 flex-wrap items-center gap-2 sm:ml-auto">
+              <span class="badge badge-sm {verification.color}" title={verification.description} aria-label={'Verification status: ' + verification.name + '. ' + verification.description}>{verification.name}</span>
               <button
                 type="button"
                 class={rowActionClass}
-                disabled={deepVerifyBusyLabel === backup.label || !capabilities.verification}
-                onclick={() => void runDeepVerify(backup)}
+                disabled={verification.name === 'Processing' || jobsLoading || !!jobsError || !capabilities.verification}
+                onclick={() => {
+                  if (deepVerification) {
+                    selectedVerifyBackup = backup;
+                    verifyError = null;
+                    deepVerifyModalOpen = true;
+                  } else void runDeepVerify(backup);
+                }}
               >
-                {#if deepVerifyBusyLabel === backup.label}
+                {#if verification.name === 'Processing'}
                   <span class="loading loading-spinner loading-xs"></span>
                 {:else}
                   <ShieldCheck class="h-4 w-4" />
@@ -552,6 +649,12 @@
         </article>
       {/each}
     </div>
+    {#if backupPageCount > 1}
+      <div class="mt-4 flex justify-end gap-2">
+        <button class="btn btn-sm btn-neutral" disabled={backupsPage === 0} onclick={() => backupsPage -= 1}>Previous</button>
+        <button class="btn btn-sm btn-neutral" disabled={backupsPage >= backupPageCount - 1} onclick={() => backupsPage += 1}>Next</button>
+      </div>
+    {/if}
   {/if}
 </section>
 
@@ -590,3 +693,18 @@
   <p class="mt-3 text-xs text-base-content/60">Recovery on another installation requires the companion keys. Restored downloads follow normal startup reconciliation; queued or active runs do not automatically resume. Create a new complete snapshot on the original installation before migrating an older database-only backup.</p>
 </section>
 {/if}
+
+<Modal bind:open={deepVerifyModalOpen} title="Deep verify backup?" size="md">
+  <p class="break-all font-mono text-sm text-base-content">{selectedVerifyBackup?.label}</p>
+  <p class="mt-3 text-sm text-base-content/80">Verify this backup's checksums, restore it to a temporary directory, and start a temporary PostgreSQL instance to validate recovery. This may take time and requires disk space for the restored database.</p>
+  {#if verifyError}<p class="mt-3 text-sm text-error" role="alert">{verifyError}</p>{/if}
+  {#snippet footer()}
+    <div class="flex w-full flex-wrap justify-end gap-2">
+      <button class="btn btn-sm btn-ghost" disabled={deepVerifyBusyLabel !== null} onclick={() => deepVerifyModalOpen = false}>Cancel</button>
+      <button class="btn btn-sm btn-primary" disabled={!selectedVerifyBackup || deepVerifyBusyLabel !== null || jobsLoading || !!jobsError || (selectedVerifyBackup && verificationState(selectedVerifyBackup).name === 'Processing')} onclick={() => { if (selectedVerifyBackup) void runDeepVerify(selectedVerifyBackup); }}>
+        {#if deepVerifyBusyLabel}<span class="loading loading-spinner loading-xs"></span>{/if}
+        Start deep verification
+      </button>
+    </div>
+  {/snippet}
+</Modal>

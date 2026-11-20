@@ -74,6 +74,7 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
             job.JobId, job.Kind, job.Type, job.Status, job.Name, job.Label,
             job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress)
         {
+            ResultSummary = job.ResultSummary,
             ActualType = job.ActualType,
             StartedAt = job.StartedAt,
             Backup = job.Backup is { } backup ? ToResponse(backup) : null

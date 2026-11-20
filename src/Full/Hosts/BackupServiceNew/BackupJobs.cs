@@ -184,6 +184,7 @@ internal sealed class BackupJobs(
             Status = status,
             Error = error,
             CompletedAt = DateTimeOffset.UtcNow,
+            ResultSummary = progress.ResultSummary,
             Progress = progress.Lines()
         });
     }
@@ -245,6 +246,7 @@ internal sealed class BackupJobs(
             var unreadable = inspection.Segments.Where(segment => !segment.Readable).Select(segment => $"{segment.Name}: {segment.Error}")
                 .Concat(inspection.Histories.Where(history => !history.Readable).Select(history => $"{history.Name}: {history.Error}"))
                 .ToArray();
+            progress.ResultSummary = $"Inspected {inspection.Segments.Count} WAL segments and {inspection.Histories.Count} history files. Found {inspection.Gaps.Count} gaps within the observed range and {unreadable.Length} unreadable files. Recovery target reachability has not been assessed.";
             progress.Add($"Inspected {inspection.Segments.Count} WAL segments and {inspection.Histories.Count} history files. Gaps: {inspection.Gaps.Count}. Unreadable files: {unreadable.Length}.");
             foreach (var gap in inspection.Gaps.Take(30))
                 progress.Add($"Gap on timeline {gap.Timeline}: {gap.FirstMissing} through {gap.LastMissing}.");
@@ -261,6 +263,7 @@ internal sealed class BackupJobs(
             progress.Add("Checking pgBackRest configuration and WAL archiving.");
             var result = await client.CheckAsync(ct);
             progress.Add(result.Output);
+            progress.ResultSummary = "Configuration and current WAL archiving passed the pgBackRest check.";
             return;
         }
         progress.Add("Expiring backups according to configured retention.");
@@ -278,11 +281,15 @@ internal sealed class BackupJobs(
     private async Task RunVerifyAsync(Job job, JobProgress progress, CancellationToken ct)
     {
         await client.VerifyAsync(job.Label, progress, ct);
+        progress.ResultSummary = job.Label is null
+            ? "Repository checksum verification passed."
+            : $"Checksum verification passed for backup {job.Label}.";
         if (job.Kind == "verify-deep")
         {
             var scratch = new ScratchRequest(Path.Combine(Path.GetTempPath(), "froststream-verify"),
                 job.Label, settings.ExpectedDatabases);
             var result = await client.TestRestoreAsync(scratch, progress, ct);
+            progress.ResultSummary = "Checksum verification and temporary restore validation passed.";
             if (!result.CleanedUp)
                 throw new InvalidOperationException($"Scratch restore cleanup failed for {result.Directory}.");
         }
@@ -298,6 +305,7 @@ internal sealed class BackupJobs(
         job.Error, job.CreatedAt, job.CompletedAt,
         job.Status == "running" && liveProgress.TryGetValue(job.Id, out var progress) ? progress.Lines() : job.Progress)
     {
+        ResultSummary = job.ResultSummary,
         ActualType = job.Backup?.Type,
         Backup = job.Backup,
         StartedAt = job.StartedAt
@@ -305,6 +313,7 @@ internal sealed class BackupJobs(
 
     private sealed record Job(Guid Id, string Kind, DateTimeOffset CreatedAt)
     {
+        public string? ResultSummary { get; init; }
         public string Status { get; init; } = "queued";
         public string? Name { get; init; }
         public string? Type { get; init; }
@@ -321,6 +330,8 @@ internal sealed class BackupJobs(
 
     private sealed class JobProgress : IProgress<OutputLine>
     {
+        public string? ResultSummary { get; set; }
+
         private readonly Queue<string> lines = new();
 
         public void Report(OutputLine value) => Add(value.Text.TrimEnd());

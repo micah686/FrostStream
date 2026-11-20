@@ -8,6 +8,7 @@ export interface BackupJob {
   jobId: string;
   kind: BackupJobKind;
   type: BackupType | null;
+  resultSummary?: string | null;
   actualType?: BackupType | null;
   backup?: BackupInfo | null;
   status: BackupJobStatus;
