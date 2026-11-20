@@ -18,43 +18,73 @@ public sealed partial class PgBackRestClient
     public Task<ArchiveInspection> InspectArchiveAsync(CancellationToken cancellationToken = default) => Exclusive(async () =>
     {
         var started = DateTimeOffset.UtcNow;
-        var listing = await Run(options.PgBackRest,
-            Arguments("repo-ls", "--recurse", "--output=text", "--log-level-console=off")
-                .Concat([$"archive/{options.Stanza}"]).ToArray(), cancellationToken);
+        // This wrapper supports one local repository. Enumerating it avoids the command
+        // runner's bounded stdout tail and never materializes a recursive text listing.
+        var archiveRoot = Path.Combine(options.RepositoryPath, "archive", options.Stanza);
+        Paths.NoLinks(archiveRoot);
         var names = new SortedSet<string>(StringComparer.Ordinal);
         var generations = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in listing.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var scanned = 0;
+        var directories = new Stack<string>();
+        directories.Push(archiveRoot);
+        while (directories.TryPop(out var directory))
         {
-            var leaf = line.Split('/').Last();
-            var match = Regex.Match(leaf, @"^([0-9A-F]{24})-[0-9a-fA-F]{40}(?:\..+)?$");
-            if (match.Success) { names.Add(match.Groups[1].Value); if (line.Contains('/')) generations.Add(line.Split('/')[0]); }
-            else
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
             {
-                match = Regex.Match(leaf, @"^([0-9A-F]{8}\.history)(?:\..+)?$");
-                if (match.Success) names.Add(match.Groups[1].Value);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (++scanned > options.ArchiveInspectionEntryLimit)
+                    throw new IOException("Archive inspection entry budget exceeded. Increase ArchiveInspectionEntryLimit to inspect this repository.");
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException($"Archive inspection refuses symlink entries: {entry}");
+                if (Directory.Exists(entry))
+                {
+                    directories.Push(entry);
+                    continue;
+                }
+                var relative = Path.GetRelativePath(archiveRoot, entry);
+                var generation = relative.Split(Path.DirectorySeparatorChar)[0];
+                var leaf = Path.GetFileName(entry);
+                var match = Regex.Match(leaf, @"^([0-9A-F]{24})-[0-9a-fA-F]{40}(?:\..+)?$");
+                if (!match.Success)
+                    match = Regex.Match(leaf, @"^([0-9A-F]{8}\.history)(?:\..+)?$");
+                if (!match.Success) continue;
+                generations.Add(generation);
+                if (generations.Count > 1)
+                    throw new InvalidOperationException("Multiple archive generations found; inspection cannot safely associate files with a single PostgreSQL cluster.");
+                names.Add(match.Groups[1].Value);
             }
         }
-        if (generations.Count > 1) throw new InvalidOperationException("Multiple archive generations found; inspection cannot safely associate segments with a single PostgreSQL cluster.");
-        if (names.Count > 10000) throw new InvalidOperationException("Archive inspection exceeds the 10,000-file limit; narrow the repository or inspect it externally.");
         var segments = new List<ArchiveSegmentEvidence>(); var histories = new List<ArchiveHistoryEvidence>();
         var warnings = new List<string>();
         var temp = Path.Combine(options.StatePath, "archive-inspection-" + Guid.NewGuid().ToString("N"));
         Paths.Writable(temp);
         try
         {
-            foreach (var name in names)
+            long historyBytes = 0;
+            foreach (var batch in names.Chunk(options.ArchiveInspectionBatchSize))
+            foreach (var name in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                // Reserve headroom for one maximum-size PostgreSQL WAL segment.
+                if (Paths.FreeBytes(temp) - options.MinimumFreeBytes < 1024L * 1024 * 1024)
+                    throw new IOException("Insufficient free space for archive inspection.");
                 var path = Path.Combine(temp, name);
                 var result = await Run(options.PgBackRest, Arguments("archive-get", "--no-archive-async").Concat([name, path]).ToArray(), cancellationToken, requireSuccess: false);
                 cancellationToken.ThrowIfCancellationRequested();
                 var exists = result.Success && File.Exists(path);
                 var error = exists ? null : $"Retrieval failed (exit {result.ExitCode}, timeout {result.TimedOut}): {(string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error)}";
+                if (error?.Length > 4096) error = error[..4096];
                 if (name.EndsWith(".history", StringComparison.Ordinal))
                 {
                     string? contents = null;
-                    if (exists && new FileInfo(path).Length <= 1024 * 1024) contents = await File.ReadAllTextAsync(path, cancellationToken);
-                    else if (exists) { exists = false; error = "History file exceeds the 1 MiB inspection limit."; }
+                    if (exists && new FileInfo(path).Length <= 1024 * 1024 &&
+                        new FileInfo(path).Length <= options.ArchiveInspectionHistoryBytes - historyBytes)
+                    {
+                        historyBytes += new FileInfo(path).Length;
+                        contents = await File.ReadAllTextAsync(path, cancellationToken);
+                    }
+                    else if (exists) { exists = false; error = "History content exceeds the per-file or total inspection budget."; }
                     histories.Add(new(name, exists, contents, error));
                 }
                 else segments.Add(new(name, exists, exists ? new FileInfo(path).Length : null, error));

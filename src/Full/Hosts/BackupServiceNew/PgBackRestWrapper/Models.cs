@@ -79,6 +79,12 @@ public sealed record WrapperOptions
     public TimeSpan MaximumBackupAge { get; init; } = TimeSpan.FromDays(2);
     public int MaximumWalBacklog { get; init; } = 10;
     public long MinimumFreeBytes { get; init; } = 1024L * 1024 * 1024;
+    /// <summary>Number of WAL names processed in each inspection batch.</summary>
+    public int ArchiveInspectionBatchSize { get; init; } = 256;
+    /// <summary>Bounds inventory and report memory, including directory and unrelated entries.</summary>
+    public int ArchiveInspectionEntryLimit { get; init; } = 1_000_000;
+    /// <summary>Total history content bytes retained in an inspection report.</summary>
+    public long ArchiveInspectionHistoryBytes { get; init; } = 16 * 1024 * 1024;
     /// <summary>Validates option values and ensures configured paths are safe and disjoint.</summary>
     internal void Validate()
     {
@@ -92,6 +98,9 @@ public sealed record WrapperOptions
             Port is < 1 or > 65535 || CommandTimeout <= TimeSpan.Zero || RecoveryTimeout <= TimeSpan.Zero ||
             MaximumBackupAge <= TimeSpan.Zero || MaximumWalBacklog < 0 || MinimumFreeBytes < 0)
             throw new ArgumentException("Invalid retention, tuning, timeout, port, or health threshold.");
+        if (ArchiveInspectionBatchSize < 1 || ArchiveInspectionBatchSize > 10000 ||
+            ArchiveInspectionEntryLimit < 1 || ArchiveInspectionHistoryBytes < 0)
+            throw new ArgumentException("Invalid archive inspection budgets.");
         if (BlockIncremental && !Bundle) throw new ArgumentException("Block incremental storage requires bundling.");
     }
 }
