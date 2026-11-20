@@ -129,7 +129,7 @@ internal sealed class BackupJobs(
     public Task<BackupJobDto> QueueMaintenanceAsync(string operation, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        if (operation is not ("check" or "expire")) throw new ArgumentException("Unknown maintenance operation.");
+        if (operation is not ("check" or "expire" or "inspect-archive")) throw new ArgumentException("Unknown maintenance operation.");
         return EnqueueAsync(new Job(Guid.NewGuid(), operation, DateTimeOffset.UtcNow));
     }
 
@@ -160,7 +160,7 @@ internal sealed class BackupJobs(
                 await RunBackupAsync(jobs[job.Id], progress, ct);
             else if (job.Kind is "verify-quick" or "verify-deep")
                 await RunVerifyAsync(job, progress, ct);
-            else if (job.Kind is "check" or "expire")
+            else if (job.Kind is "check" or "expire" or "inspect-archive")
                 await RunMaintenanceAsync(job.Kind, progress, ct);
             else throw new InvalidOperationException($"Unknown job kind '{job.Kind}'.");
 
@@ -238,6 +238,24 @@ internal sealed class BackupJobs(
 
     private async Task RunMaintenanceAsync(string kind, JobProgress progress, CancellationToken ct)
     {
+        if (kind == "inspect-archive")
+        {
+            progress.Add("Inspecting archived WAL. This may take a long time.");
+            var inspection = await client.InspectArchiveAsync(ct);
+            var unreadable = inspection.Segments.Where(segment => !segment.Readable).Select(segment => $"{segment.Name}: {segment.Error}")
+                .Concat(inspection.Histories.Where(history => !history.Readable).Select(history => $"{history.Name}: {history.Error}"))
+                .ToArray();
+            progress.Add($"Inspected {inspection.Segments.Count} WAL segments and {inspection.Histories.Count} history files. Gaps: {inspection.Gaps.Count}. Unreadable files: {unreadable.Length}.");
+            foreach (var gap in inspection.Gaps.Take(30))
+                progress.Add($"Gap on timeline {gap.Timeline}: {gap.FirstMissing} through {gap.LastMissing}.");
+            foreach (var item in unreadable.Take(30))
+                progress.Add($"Unreadable: {item}");
+            foreach (var warning in inspection.Warnings.Take(30))
+                progress.Add($"Warning: {warning}");
+            if (inspection.Gaps.Count > 30 || unreadable.Length > 30 || inspection.Warnings.Count > 30)
+                progress.Add("Job output is limited to the first 30 entries of each category. The complete report is saved in the backup service state directory.");
+            return;
+        }
         if (kind == "check")
         {
             progress.Add("Checking pgBackRest configuration and WAL archiving.");

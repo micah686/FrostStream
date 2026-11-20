@@ -84,7 +84,7 @@
     catch (err) { healthError = err instanceof Error ? err.message : 'Could not load backup health.'; }
   }
 
-  async function runMaintenance(operation: 'check' | 'expire') {
+  async function runMaintenance(operation: 'check' | 'expire' | 'inspect-archive') {
     if (operation === 'expire' && !window.confirm('Expire backups according to the configured retention policy?')) return;
     maintenanceBusy = true;
     try { mergeJob(await runBackupMaintenance(operation)); healthError = null; }
@@ -225,6 +225,8 @@
         return 'quick verify';
       case 'verify-deep':
         return 'deep verify';
+      case 'inspect-archive':
+        return 'archive inspection';
       case 'restore':
         return 'restore';
       default:
@@ -409,6 +411,7 @@
   {#if !lite}
     <div class="mt-5 flex flex-wrap gap-2">
       <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('check')}>Check archiving</button>
+      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('inspect-archive')}>Inspect archived WAL</button>
       <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('expire')}>Expire backups</button>
       <button class="btn btn-sm btn-neutral" onclick={() => void loadHealth()}>Refresh health</button>
     </div>

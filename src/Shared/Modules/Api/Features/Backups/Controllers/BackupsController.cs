@@ -50,7 +50,7 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
     [Endpoint(EndpointIds.BackupsMaintenance)]
     public async Task<ActionResult<BackupJobResponse>> Maintenance(string operation, CancellationToken cancellationToken)
     {
-        if (operation is not ("check" or "expire")) return BadRequest();
+        if (operation is not ("check" or "expire" or "inspect-archive")) return BadRequest();
         return Accepted(await backups.MaintenanceAsync(operation, cancellationToken));
     }
 

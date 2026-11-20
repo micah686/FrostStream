@@ -90,7 +90,7 @@ backups.MapGet("/health", async (PgBackRestClient client, CancellationToken ct) 
         health.RepositoryFreeBytes, health.DataFreeBytes, health.ArchiverStatistics, health.Problems));
 });
 backups.MapPost("/maintenance/{operation}", async (string operation, BackupJobs jobs, CancellationToken ct) =>
-    operation is "check" or "expire" ? Accepted(await jobs.QueueMaintenanceAsync(operation, ct)) : Results.BadRequest());
+    operation is "check" or "expire" or "inspect-archive" ? Accepted(await jobs.QueueMaintenanceAsync(operation, ct)) : Results.BadRequest());
 
 var liveness = new HealthCheckOptions { Predicate = registration => registration.Tags.Contains("live") };
 app.MapHealthChecks("/health", liveness);

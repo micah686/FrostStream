@@ -2,7 +2,7 @@ export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export type BackupType = 'full' | 'diff' | 'incr';
 
-export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore' | 'check' | 'expire';
+export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore' | 'check' | 'expire' | 'inspect-archive';
 
 export interface BackupJob {
   jobId: string;
@@ -92,7 +92,7 @@ export function getBackupHealth(fetchImpl: typeof fetch = fetch): Promise<Backup
   return getJson<BackupHealth>(`${BASE}/health`, fetchImpl);
 }
 
-export function runBackupMaintenance(operation: 'check' | 'expire', fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
+export function runBackupMaintenance(operation: 'check' | 'expire' | 'inspect-archive', fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
   return sendJson<BackupJob>(`${BASE}/maintenance/${operation}`, {}, fetchImpl);
 }
 
