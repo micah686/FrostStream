@@ -65,7 +65,6 @@ public sealed record WrapperOptions
     public string Postgres { get; init; } = "postgres";
     public string PgCtl { get; init; } = "pg_ctl";
     public string Psql { get; init; } = "psql";
-    public string PgDump { get; init; } = "pg_dump";
     public string SocketPath { get; init; } = "/var/run/postgresql";
     public int Port { get; init; } = 5432;
     public string DatabaseUser { get; init; } = "postgres";

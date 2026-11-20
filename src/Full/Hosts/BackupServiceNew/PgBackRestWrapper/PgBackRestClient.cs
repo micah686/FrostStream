@@ -105,9 +105,6 @@ public sealed partial class PgBackRestClient
         }
         finally { gate.Release(); }
     }
-    /// <summary>Checks installed tool versions and required pgBackRest commands.</summary>
-    /// <param name="cancellationToken">Token used to cancel the checks.</param>
-    public Task<CompatibilityReport> CheckCompatibilityAsync(CancellationToken cancellationToken = default) => Compatibility(cancellationToken);
     /// <summary>Checks tool versions and command support, then saves the compatibility report.</summary>
     /// <param name="ct">Cancellation token.</param>
     /// <summary>Checks tool versions and required command support, then saves the resulting report.</summary>
@@ -216,22 +213,6 @@ public sealed partial class PgBackRestClient
     {
         if (!Regex.IsMatch(label, @"^\d{8}-\d{6}F(?:_\d{8}-\d{6}[DI])?$")) throw new ArgumentException("Invalid pgBackRest backup label.");
     }
-    /// <summary>Pushes a WAL file into the configured archive.</summary>
-    /// <param name="walPath">Absolute path to the WAL file.</param><param name="cancellationToken">Token used to cancel the command.</param>
-    public Task<CommandResult> ArchivePushAsync(string walPath, CancellationToken cancellationToken = default)
-    {
-        Paths.Absolute(walPath);
-        return Run(options.PgBackRest, Arguments("archive-push").Concat([walPath]).ToArray(), cancellationToken);
-    }
-    /// <summary>Retrieves a WAL segment or timeline history file from the archive.</summary>
-    /// <param name="walName">WAL segment or history filename.</param><param name="destination">Absolute output file path.</param>
-    /// <param name="cancellationToken">Token used to cancel retrieval.</param>
-    public Task<CommandResult> ArchiveGetAsync(string walName, string destination, CancellationToken cancellationToken = default)
-    {
-        if (!Regex.IsMatch(walName, @"^(?:[0-9A-F]{24}(?:\.partial)?|[0-9A-F]{8}\.history)$")) throw new ArgumentException("Invalid WAL name.");
-        Paths.Absolute(destination);
-        return Run(options.PgBackRest, Arguments("archive-get").Concat([walName, destination]).ToArray(), cancellationToken);
-    }
     /// <summary>Runs SQL through psql using the configured database user and recovery timeout.</summary>
     /// <param name="sql">SQL statement to execute.</param><param name="database">Database name.</param><param name="socket">PostgreSQL socket directory.</param>
     /// <param name="port">PostgreSQL port.</param><param name="ct">Cancellation token.</param>
@@ -245,25 +226,4 @@ public sealed partial class PgBackRestClient
         if (string.IsNullOrWhiteSpace(name) || name.Length > 63 || name.Any(char.IsControl)) throw new ArgumentException("Invalid restore point name.");
         return Sql($"SELECT pg_create_restore_point('{name.Replace("'", "''")}');", "postgres", options.SocketPath, options.Port, cancellationToken);
     }
-    /// <summary>Exports a database as a custom format dump after checking client and server major versions.</summary>
-    /// <param name="database">Database to export.</param><param name="outputFile">Absolute destination file, which must not already exist.</param>
-    /// <param name="cancellationToken">Token used to cancel the export.</param>
-    public Task<CommandResult> ExportDatabaseAsync(string database, string outputFile, CancellationToken cancellationToken = default) => Exclusive(async () =>
-    {
-        Paths.Absolute(outputFile); Paths.Disjoint(outputFile, options.DataPath); Paths.Disjoint(outputFile, options.RepositoryPath);
-        Paths.NoLinks(outputFile);
-        await using var reservation = new FileStream(outputFile, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-        var temporary = outputFile + $".{Guid.NewGuid():N}.partial";
-        try
-        {
-            var version = await Run(options.PgDump, ["--version"], cancellationToken);
-            var server = await Sql("SHOW server_version;", database, options.SocketPath, options.Port, cancellationToken);
-            if (Major(version.Output) != Major(server.Output)) throw new InvalidOperationException("pg_dump must match server major version.");
-            var result = await Run(options.PgDump, ["-w", "--format=custom", "--host", options.SocketPath, "--port", options.Port.ToString(CultureInfo.InvariantCulture),
-                "--username", options.DatabaseUser, "--file", temporary, "--dbname", database], cancellationToken);
-            File.Move(temporary, outputFile, true); return result;
-        }
-        catch { File.Delete(outputFile); throw; }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
-    }, cancellationToken);
 }
