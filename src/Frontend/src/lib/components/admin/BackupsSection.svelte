@@ -16,10 +16,13 @@
     ShieldCheck
   } from '@lucide/svelte';
   import {
+    getBackupHealth,
+    runBackupMaintenance,
     listBackupJobs,
     listBackups,
     startBackup,
     verifyBackup,
+    type BackupHealth,
     type BackupInfo,
     type BackupJob,
     type BackupRepository,
@@ -71,6 +74,24 @@
   let deepVerifyBusyLabel = $state<string | null>(null);
   let verifyError = $state<string | null>(null);
 
+  let health = $state<BackupHealth | null>(null);
+  let healthError = $state<string | null>(null);
+  let maintenanceBusy = $state(false);
+
+  async function loadHealth() {
+    if (lite) return;
+    try { health = await getBackupHealth(); healthError = null; }
+    catch (err) { healthError = err instanceof Error ? err.message : 'Could not load backup health.'; }
+  }
+
+  async function runMaintenance(operation: 'check' | 'expire') {
+    if (operation === 'expire' && !window.confirm('Expire backups according to the configured retention policy?')) return;
+    maintenanceBusy = true;
+    try { mergeJob(await runBackupMaintenance(operation)); healthError = null; }
+    catch (err) { healthError = err instanceof Error ? err.message : 'Could not start maintenance.'; }
+    finally { maintenanceBusy = false; }
+  }
+
   let restoreUiUrl = $state('');
 
   const hasActiveJobs = $derived(jobs.some((job) => job.status === 'queued' || job.status === 'running'));
@@ -79,6 +100,7 @@
     restoreUiUrl = `http://${window.location.hostname}:25900/`;
     void loadJobs(true);
     void loadRepository();
+    void loadHealth();
   });
 
   onDestroy(() => stopPolling());
@@ -112,6 +134,7 @@
         if (previousActive) {
           // A job just finished; the repository may have a new backup or verify result.
           void loadRepository();
+          void loadHealth();
         }
       }
     } catch (err) {
@@ -382,6 +405,22 @@
       </button>
     </div>
   </div>
+
+  {#if !lite}
+    <div class="mt-5 flex flex-wrap gap-2">
+      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('check')}>Check archiving</button>
+      <button class="btn btn-sm btn-neutral" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance('expire')}>Expire backups</button>
+      <button class="btn btn-sm btn-neutral" onclick={() => void loadHealth()}>Refresh health</button>
+    </div>
+    {#if healthError}<p class="mt-3 text-sm text-error" role="alert">{healthError}</p>{/if}
+    {#if health}
+      <div class="mt-3 text-sm" role="status">
+        <p>{health.healthy ? 'Backup health: healthy' : 'Backup health needs attention'} · {health.walReadySegments} WAL segments awaiting archival</p>
+        <p>Repository free: {formatSize(health.repositoryFreeBytes)} · Database free: {formatSize(health.dataFreeBytes)} · Observed {formatDate(health.observedAt)}</p>
+        {#each health.problems as problem}<p class="text-error">{problem}</p>{/each}
+      </div>
+    {/if}
+  {/if}
 
   {#if repositoryError}
     <div class="alert alert-error mt-5 text-sm" role="alert">

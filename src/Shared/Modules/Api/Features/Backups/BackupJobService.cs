@@ -45,6 +45,18 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
             repository.DatabasePath, repository.BackupDirectory, repository.KeyRingPath);
     }
 
+    public Task<BackupHealthDto> GetHealthAsync(CancellationToken cancellationToken)
+    {
+        if (capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Backup health is only available for PostgreSQL.");
+        return client.GetHealthAsync(cancellationToken);
+    }
+
+    public async Task<BackupJobResponse> MaintenanceAsync(string operation, CancellationToken cancellationToken)
+    {
+        if (capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Backup maintenance is only available for PostgreSQL.");
+        return ToResponse(await client.MaintenanceAsync(operation, cancellationToken));
+    }
+
     public async Task<BackupJobResponse> VerifyAsync(
         string? label,
         bool deep,

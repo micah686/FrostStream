@@ -126,6 +126,13 @@ internal sealed class BackupJobs(
         });
     }
 
+    public Task<BackupJobDto> QueueMaintenanceAsync(string operation, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (operation is not ("check" or "expire")) throw new ArgumentException("Unknown maintenance operation.");
+        return EnqueueAsync(new Job(Guid.NewGuid(), operation, DateTimeOffset.UtcNow));
+    }
+
     private async Task<BackupJobDto> EnqueueAsync(Job job)
     {
         await SaveAsync(job);
@@ -151,8 +158,11 @@ internal sealed class BackupJobs(
         {
             if (job.Kind == "backup")
                 await RunBackupAsync(jobs[job.Id], progress, ct);
-            else
+            else if (job.Kind is "verify-quick" or "verify-deep")
                 await RunVerifyAsync(job, progress, ct);
+            else if (job.Kind is "check" or "expire")
+                await RunMaintenanceAsync(job.Kind, progress, ct);
+            else throw new InvalidOperationException($"Unknown job kind '{job.Kind}'.");
 
             await FinishAsync("completed", null);
         }
@@ -224,6 +234,27 @@ internal sealed class BackupJobs(
             run.Fail(ex.Message);
             throw;
         }
+    }
+
+    private async Task RunMaintenanceAsync(string kind, JobProgress progress, CancellationToken ct)
+    {
+        if (kind == "check")
+        {
+            progress.Add("Checking pgBackRest configuration and WAL archiving.");
+            var result = await client.CheckAsync(ct);
+            progress.Add(result.Output);
+            return;
+        }
+        progress.Add("Expiring backups according to configured retention.");
+        var before = await client.GetRepositoryAsync(ct);
+        if (before.StatusCode != 0) throw new InvalidOperationException(before.StatusMessage);
+        var expired = await client.ExpireAsync(ct);
+        progress.Add(expired.Output);
+        var after = await client.GetRepositoryAsync(ct);
+        if (after.StatusCode != 0) throw new InvalidOperationException(after.StatusMessage);
+        var removed = before.Backups.Select(b => b.Label).Except(after.Backups.Select(b => b.Label)).ToArray();
+        progress.Add(removed.Length == 0 ? "No backup labels expired." : $"Expired labels: {string.Join(", ", removed)}");
+        progress.Add("OpenBao companion files are retained and are not removed by expiration.");
     }
 
     private async Task RunVerifyAsync(Job job, JobProgress progress, CancellationToken ct)

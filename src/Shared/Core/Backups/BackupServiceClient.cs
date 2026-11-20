@@ -7,6 +7,18 @@ public sealed class BackupServiceClient(HttpClient httpClient) : IBackupServiceC
 {
     public const string ApiTokenHeader = "X-FrostStream-Backup-Token";
 
+    public async Task<BackupHealthDto> GetHealthAsync(CancellationToken cancellationToken = default)
+        => await httpClient.GetFromJsonAsync<BackupHealthDto>("/internal/backups/health", cancellationToken)
+           ?? throw new InvalidOperationException("Backup service returned an empty health response.");
+
+    public async Task<BackupJobDto> MaintenanceAsync(string operation, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync($"/internal/backups/maintenance/{operation}", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<BackupJobDto>(cancellationToken)
+               ?? throw new InvalidOperationException("Backup service returned an empty job response.");
+    }
+
     public async Task<BackupJobDto> CreateAsync(
         CreateBackupJobRequest request,
         CancellationToken cancellationToken = default)

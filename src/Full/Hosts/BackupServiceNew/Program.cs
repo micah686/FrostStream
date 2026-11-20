@@ -83,6 +83,15 @@ backups.MapGet("/backups", async (BackupRepository repository, CancellationToken
 backups.MapPost("/verify", async (VerifyBackupRequest request, BackupJobs jobs, CancellationToken ct) =>
     Accepted(await jobs.QueueVerifyAsync(request, ct)));
 
+backups.MapGet("/health", async (PgBackRestClient client, CancellationToken ct) =>
+{
+    var health = await client.GetHealthAsync(cancellationToken: ct);
+    return Results.Ok(new BackupHealthDto(health.ObservedAt, health.Healthy, health.WalReadySegments,
+        health.RepositoryFreeBytes, health.DataFreeBytes, health.ArchiverStatistics, health.Problems));
+});
+backups.MapPost("/maintenance/{operation}", async (string operation, BackupJobs jobs, CancellationToken ct) =>
+    operation is "check" or "expire" ? Accepted(await jobs.QueueMaintenanceAsync(operation, ct)) : Results.BadRequest());
+
 var liveness = new HealthCheckOptions { Predicate = registration => registration.Tags.Contains("live") };
 app.MapHealthChecks("/health", liveness);
 app.MapHealthChecks("/alive", liveness);

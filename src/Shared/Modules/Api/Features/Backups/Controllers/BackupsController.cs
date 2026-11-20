@@ -41,6 +41,19 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
     public async Task<ActionResult<BackupRepositoryResponse>> ListBackups(CancellationToken cancellationToken)
         => Ok(await backups.ListBackupsAsync(cancellationToken));
 
+    [HttpGet("health")]
+    [Endpoint(EndpointIds.BackupsHealth)]
+    public async Task<ActionResult<Shared.Backups.BackupHealthDto>> Health(CancellationToken cancellationToken)
+        => Ok(await backups.GetHealthAsync(cancellationToken));
+
+    [HttpPost("maintenance/{operation}")]
+    [Endpoint(EndpointIds.BackupsMaintenance)]
+    public async Task<ActionResult<BackupJobResponse>> Maintenance(string operation, CancellationToken cancellationToken)
+    {
+        if (operation is not ("check" or "expire")) return BadRequest();
+        return Accepted(await backups.MaintenanceAsync(operation, cancellationToken));
+    }
+
     [HttpPost("verify")]
     [Endpoint(EndpointIds.BackupsVerify)]
     [EndpointSummary("Verify backups")]

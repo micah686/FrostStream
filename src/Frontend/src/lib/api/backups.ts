@@ -2,7 +2,7 @@ export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export type BackupType = 'full' | 'diff' | 'incr';
 
-export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore';
+export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore' | 'check' | 'expire';
 
 export interface BackupJob {
   jobId: string;
@@ -51,6 +51,16 @@ export interface BackupRepository {
   keyRingPath?: string | null;
 }
 
+export interface BackupHealth {
+  observedAt: string;
+  healthy: boolean;
+  walReadySegments: number;
+  repositoryFreeBytes: number;
+  dataFreeBytes: number;
+  archiverStatistics: string | null;
+  problems: string[];
+}
+
 const BASE = '/api/global/backups';
 
 export async function startBackup(
@@ -76,6 +86,14 @@ export async function verifyBackup(
   fetchImpl: typeof fetch = fetch
 ): Promise<BackupJob> {
   return sendJson<BackupJob>(`${BASE}/verify`, { label, deep }, fetchImpl);
+}
+
+export function getBackupHealth(fetchImpl: typeof fetch = fetch): Promise<BackupHealth> {
+  return getJson<BackupHealth>(`${BASE}/health`, fetchImpl);
+}
+
+export function runBackupMaintenance(operation: 'check' | 'expire', fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
+  return sendJson<BackupJob>(`${BASE}/maintenance/${operation}`, {}, fetchImpl);
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

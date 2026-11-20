@@ -55,8 +55,12 @@ public sealed record BackupRepositoryDto(
     string? BackupDirectory = null,
     string? KeyRingPath = null);
 
+public sealed record BackupHealthDto(DateTimeOffset ObservedAt, bool Healthy, int WalReadySegments, long RepositoryFreeBytes, long DataFreeBytes, string? ArchiverStatistics, IReadOnlyList<string> Problems);
+
 public interface IBackupServiceClient
 {
+    Task<BackupHealthDto> GetHealthAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException("Backup health is not supported in this deployment.");
+    Task<BackupJobDto> MaintenanceAsync(string operation, CancellationToken cancellationToken = default) => throw new NotSupportedException("Backup maintenance is not supported in this deployment.");
     Task<BackupJobDto> CreateAsync(CreateBackupJobRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BackupJobDto>> ListJobsAsync(CancellationToken cancellationToken = default);
     Task<BackupJobDto?> GetJobAsync(Guid jobId, CancellationToken cancellationToken = default);
