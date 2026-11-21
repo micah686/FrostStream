@@ -22,15 +22,16 @@ public static class StartServices
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> potProvider,
         IResourceBuilder<ContainerResource> backupService,
+        IResourceBuilder<ParameterResource> backupApiToken,
         ClickHouseResources clickHouse)
     {
         var openBao = openBaoResources.Server;
         var webApiEndpointName = hardening.EnableHttps ? "https" : "http";
         var databridge = WireDataBridge(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, typesense, typesenseApiKey, potProvider, clickHouse);
-        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, mediaProcessorStorageToken, authentik, openFga, backupService, webApiEndpointName, clickHouse);
+        var webapi = WireWebApi(builder, hardening, sharedStorageRoot, nats, databridge, openBaoResources, openBaoToken, mediaProcessorStorageToken, authentik, openFga, backupService, backupApiToken, webApiEndpointName, clickHouse);
         WireWorker(builder, hardening, sharedStorageRoot, nats, openBaoResources, openBaoToken, clickHouse);
         WireMediaProcessor(builder, nats, databridge, webapi, webApiEndpointName, mediaProcessorStorageToken);
-        WireScheduler(builder, nats, databridge, backupService);
+        WireScheduler(builder, nats, databridge, backupService, backupApiToken);
         //WireAuthTester(builder, hardening, webapi, authentik, webApiEndpointName);
         StartFrontend.Wire(builder, webapi, webApiEndpointName);
     }
@@ -101,6 +102,7 @@ public static class StartServices
         AuthentikResources authentik,
         OpenFgaResources openFga,
         IResourceBuilder<ContainerResource> backupService,
+        IResourceBuilder<ParameterResource> backupApiToken,
         string webApiEndpointName,
         ClickHouseResources clickHouse)
     {
@@ -167,6 +169,7 @@ public static class StartServices
             // WebAPI only needs the flag: chat queries proxy to DataBridge over NATS.
             .WithEnvironment("LiveChat__Enabled", clickHouse.Server is not null ? "true" : "false")
             .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
+            .WithEnvironment("BackupService__ApiToken", backupApiToken)
             .WaitForOpenBao(openBaoResources)
             .WaitFor(backupService)
             .PublishAsDockerFile(c => c
@@ -291,13 +294,15 @@ public static class StartServices
         IDistributedApplicationBuilder builder,
         IResourceBuilder<NatsServerResource> nats,
         IResourceBuilder<ProjectResource> databridge,
-        IResourceBuilder<ContainerResource> backupService)
+        IResourceBuilder<ContainerResource> backupService,
+        IResourceBuilder<ParameterResource> backupApiToken)
     {
         var scheduler = builder.AddProject<Projects.SchedulerHost>("scheduler")
             .WithReference(nats).WaitFor(nats)
             .WaitFor(databridge)
             // Scheduled backups dispatch over REST directly to BackupService.
             .WithEnvironment("BackupService__BaseUrl", backupService.GetEndpoint("http"))
+            .WithEnvironment("BackupService__ApiToken", backupApiToken)
             .WaitFor(backupService)
             .WithHttpEndpoint(port: Ports.Scheduler, name: "http")
             .WithUrlForEndpoint("http", url =>

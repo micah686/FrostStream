@@ -260,6 +260,8 @@ public static class EndpointIds
     public const string BackupsJobsList = "backups.jobs.list";
     public const string BackupsJobsGet = "backups.jobs.get";
     public const string BackupsList = "backups.list";
+    public const string BackupsHealth = "backups.health";
+    public const string BackupsMaintenance = "backups.maintenance";
     public const string BackupsVerify = "backups.verify";
 }
 
@@ -485,6 +487,8 @@ public static class EndpointCatalog
         new(EndpointIds.BackupsJobsList, Bundles.Management),
         new(EndpointIds.BackupsJobsGet, Bundles.Management),
         new(EndpointIds.BackupsList, Bundles.Management),
+        new(EndpointIds.BackupsHealth, Bundles.Management),
+        new(EndpointIds.BackupsMaintenance, Bundles.Management),
         new(EndpointIds.BackupsVerify, Bundles.Management),
     ];
 

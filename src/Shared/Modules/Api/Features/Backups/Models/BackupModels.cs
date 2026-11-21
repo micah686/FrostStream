@@ -1,6 +1,6 @@
 namespace WebAPI.Features.Backups.Models;
 
-public sealed record CreateBackupRequest(string? Name, string? Type);
+public sealed record CreateBackupRequest(string? Name, string? Type, string Mode = "physical", bool IncludeOpenBao = true, bool IncludeOpenBaoKeys = false, bool IncludeDataProtectionKeys = false);
 
 public sealed record BackupJobResponse(
     Guid JobId,
@@ -12,7 +12,13 @@ public sealed record BackupJobResponse(
     string? ErrorMessage,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<string> Progress);
+    IReadOnlyList<string> Progress)
+{
+    public string? ResultSummary { get; init; }
+    public string? ActualType { get; init; }
+    public BackupSummaryResponse? Backup { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+}
 
 public sealed record BackupSummaryResponse(
     string Label,
@@ -26,7 +32,11 @@ public sealed record BackupSummaryResponse(
     string? WalStop,
     bool HasError,
     bool OpenBaoExportPresent,
-    bool? KeyRingBackupPresent = null);
+    bool? KeyRingBackupPresent = null)
+{
+    public string Mode { get; init; } = "physical";
+    public IReadOnlyList<string>? Dependencies { get; init; }
+}
 
 public sealed record PitrWindowResponse(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
 

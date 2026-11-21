@@ -39,8 +39,7 @@ public sealed class ScheduleCrudConsumerService(
         var msg = context.Message;
         try
         {
-            if ((msg.Enabled && msg.TaskType == "backup-diff" && capabilities?.Backups.Differential == false
-                ? "Differential backup schedules are not supported in this deployment." : Validate(msg)) is { } validationError)
+            if ((ValidateBackupSchedule(msg.TaskType, msg.Enabled) ?? Validate(msg)) is { } validationError)
             {
                 await context.RespondAsync(Failure("validation", validationError));
                 return;
@@ -68,8 +67,7 @@ public sealed class ScheduleCrudConsumerService(
         var msg = context.Message;
         try
         {
-            if ((msg.Enabled && msg.TaskType == "backup-diff" && capabilities?.Backups.Differential == false
-                ? "Differential backup schedules are not supported in this deployment." : Validate(msg)) is { } validationError)
+            if ((ValidateBackupSchedule(msg.TaskType, msg.Enabled) ?? Validate(msg)) is { } validationError)
             {
                 await context.RespondAsync(Failure("validation", validationError));
                 return;
@@ -91,6 +89,15 @@ public sealed class ScheduleCrudConsumerService(
             await context.RespondAsync(Failure("internal", "Failed to update schedule."));
         }
     }
+
+    private string? ValidateBackupSchedule(string taskType, bool enabled) => (enabled, taskType) switch
+    {
+        (true, "backup-diff") when capabilities?.Backups.Differential == false
+            => "Differential backup schedules are not supported in this deployment.",
+        (true, "backup-incr") when capabilities?.Backups.Incremental == false
+            => "Incremental backup schedules are not supported in this deployment.",
+        _ => null
+    };
 
     private async Task HandleGetAsync(IMessageContext<ScheduleGetRequestMessage> context)
     {

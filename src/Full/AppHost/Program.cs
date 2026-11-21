@@ -80,9 +80,16 @@ var postgres = StartPostgres.Start(builder, hardening, sharedStorageRoot);
 var openBaoResources = StartOpenBao.Start(builder, sharedStorageRoot, openBaoToken);
 var authentik = StartAuthentik.Start(builder, postgres, hardening);
 var openFga = StartOpenFga.Start(builder, postgres, hardening);
-var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken);
+var backupApiToken = builder.AddParameter(
+    "backup-api-token",
+    string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BACKUP_API_TOKEN"))
+        ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+        : Environment.GetEnvironmentVariable("BACKUP_API_TOKEN")!,
+    publishValueAsDefault: false,
+    secret: true);
+var backupService = StartBackupService.Start(builder, sharedStorageRoot, nats, postgres, openBaoResources, openBaoToken, backupApiToken);
 StartServices.Wire(builder, hardening, sharedStorageRoot, nats, postgres, openBaoResources,
-    openBaoToken, mediaProcessorStorageToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, clickHouse);
+    openBaoToken, mediaProcessorStorageToken, typesense, typesenseApiKey, authentik, openFga, potProvider, backupService, backupApiToken, clickHouse);
 builder.Build().Run();
 
 static string ResolveStorageRoot(IDistributedApplicationBuilder builder)

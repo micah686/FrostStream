@@ -1,0 +1,10 @@
+@page "/"
+@model IndexModel
+@{ ViewData["Title"] = "Recovery type"; ViewData["Step"] = 1; ViewData["RecoveryType"] = "Not selected"; }
+<div class="section-head"><div><h2>Choose a recovery type</h2><p class="muted">Start by choosing what you need to restore.</p></div><span class="pill blue">STEP 1 OF 8</span></div>
+<form method="get" action="/recovery/readiness">
+<label class="choice selected"><input type="radio" name="kind" value="physical" checked /><div class="choice-body"><div class="choice-title"><h3>Physical restore</h3><span class="pill blue">Entire cluster</span></div><p>Restore the entire PostgreSQL cluster from a pgBackRest backup, with optional point-in-time recovery.</p></div></label>
+<label class="choice"><input type="radio" name="kind" value="logical" /><div class="choice-body"><div class="choice-title"><h3>Logical restore</h3><span class="pill blue">All databases</span></div><p>Restore all databases from a logical backup while PostgreSQL is running.</p></div></label>
+<div class="notice"><strong>Before you begin</strong>Make sure you have access to the backup repository and destination environment. We’ll check the prerequisites next.</div>
+<div class="footer"><span></span><button class="primary" type="submit">Continue</button></div>
+</form>

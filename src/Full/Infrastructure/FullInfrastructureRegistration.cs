@@ -46,7 +46,11 @@ public static class FullInfrastructureRegistration
         if (DeploymentOptions.FromConfiguration(builder.Configuration).Mode != DeploymentMode.Full)
             throw new InvalidOperationException("The remote backup client requires Full.");
         builder.Services.AddHttpClient<IBackupServiceClient, BackupServiceClient>(client =>
-            client.BaseAddress = new Uri(builder.Configuration["BackupService:BaseUrl"] ?? "http://backupservice"));
+        {
+            client.BaseAddress = new Uri(builder.Configuration["BackupService:BaseUrl"] ?? "http://backupservice");
+            if (builder.Configuration["BackupService:ApiToken"] is { Length: > 0 } token)
+                client.DefaultRequestHeaders.Add(BackupServiceClient.ApiTokenHeader, token);
+        });
         return builder;
     }
 }

@@ -28,7 +28,14 @@
 
   const cardClass = 'card border-[length:var(--border)] border-base-300 bg-base-100 p-5 sm:p-6';
 
-  const supportedTaskTypes = $derived(scheduleTaskTypes.filter((type) => type !== 'backup-diff' || page.data.capabilities.backups.differential));
+  const backupCapabilities = $derived(page.data.capabilities.backups);
+  const supportedTaskTypes = $derived(scheduleTaskTypes.filter(isSupportedTaskType));
+
+  function isSupportedTaskType(taskType: string): boolean {
+    if (taskType === 'backup-diff') return backupCapabilities.differential;
+    if (taskType === 'backup-incr') return backupCapabilities.incremental;
+    return true;
+  }
   const taskTypeItems = $derived(supportedTaskTypes.map((taskType) => ({ value: taskType, name: taskType })));
   const timingItems = [
     { value: 'interval', name: 'Interval' },
@@ -131,6 +138,10 @@
     {
       type: 'backup-diff',
       summary: 'Takes a differential pgBackRest backup of everything changed since the last full backup.'
+    },
+    {
+      type: 'backup-incr',
+      summary: 'Takes an incremental pgBackRest backup of everything changed since the latest backup.'
     }
   ] as const;
 
@@ -140,7 +151,7 @@
   }
 
   let schedules = $state<ScheduledTask[]>([]);
-  const visibleSchedules = $derived(schedules.filter((schedule) => schedule.taskType !== 'backup-diff' || page.data.capabilities.backups.differential));
+  const visibleSchedules = $derived(schedules.filter((schedule) => isSupportedTaskType(schedule.taskType)));
   let loading = $state(true);
   let loadError = $state<Error | null>(null);
   let mutation = $state<string | null>(null);

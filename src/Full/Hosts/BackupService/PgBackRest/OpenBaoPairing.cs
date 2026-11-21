@@ -37,6 +37,10 @@ internal class OpenBaoPairing(BackupServiceOptions options, ILogger<OpenBaoPairi
     public virtual bool HasExport(string label) => File.Exists(ExportFile(label));
     public virtual bool HasSnapshotExport(string label) => File.Exists(SnapshotFile(label));
 
+    public bool HasCompleteExport(string label)
+        => HasExport(label) && File.Exists(ExportFile(label) + ".sha256")
+            && HasSnapshotExport(label) && File.Exists(SnapshotFile(label) + ".sha256");
+
     /// <summary>Restores the KV-only export paired with <paramref name="label"/> into OpenBao. Prefer <see cref="RestoreSnapshotAsync"/> — this is a fallback if the snapshot restore can't be used.</summary>
     public virtual async Task RestoreAsync(string label, CancellationToken cancellationToken)
     {

@@ -1,0 +1,53 @@
+@page "{id:guid}"
+@model OpenBaoModel
+@{
+    ViewData["Title"] = "Restore OpenBao";
+    ViewData["Step"] = 6;
+    var job = Model.Job;
+    ViewData["RecoveryType"] = job.Plan.Backup.Mode == "logical" ? "Logical" : "Physical";
+}
+<h1>Restore OpenBao</h1>
+<p class="lede">PostgreSQL recovery passed its checks. Keep application writers stopped while recovering the OpenBao companion for <code>@job.Plan.Backup.Label</code>.</p>
+<div asp-validation-summary="All" class="form-errors" role="alert"></div>
+<section class="surface">
+    @if (!job.Plan.Backup.OpenBaoExportPresent)
+    {
+        <p class="notice">The paired OpenBao companion is missing. Recover secrets separately before starting application services.</p>
+    }
+    else if (Model.OpenBaoJob is { } bao)
+    {
+        <p>OpenBao restore: <strong>@bao.Status</strong>. @bao.Observation @bao.Error</p>
+        <a asp-page="./Run" asp-route-id="@bao.Id">View OpenBao restore log</a>
+        @if (bao.Status is "queued" or "running")
+        {
+            <p class="caption" data-refresh-job><a asp-page="./OpenBao" asp-route-id="@job.Id">Refresh progress</a></p>
+        }
+    }
+    else
+    {
+        <ol class="next-steps">
+            <li>Start OpenBao and ensure it is reachable and unsealed with the configured restore token.</li>
+            <li>Confirm you have the unseal keys and credentials for the snapshot. The restore replaces OpenBao storage, including authentication and tokens.</li>
+        </ol>
+        <form method="post" asp-route-id="@job.Id" class="stack">
+            <label class="ack"><input asp-for="ConfirmOpenBao" /> I authorize replacing OpenBao storage with the paired snapshot and confirm writers are stopped.</label>
+            <button class="destructive" type="submit">Restore OpenBao snapshot</button>
+        </form>
+    }
+</section>
+<section class="surface">
+    <h2>After OpenBao recovery</h2>
+    <ol class="next-steps">
+        <li>Verify OpenBao is unsealed and its authentication and application secrets work. Reconcile media, external storage and supporting infrastructure.</li>
+        <li>Start application services and verify FrostStream before enabling writers. Rebuild indexes where needed.</li>
+        <li>Confirm WAL archiving is healthy and take a new backup.</li>
+    </ol>
+</section>
+<a class="quiet back-link" asp-page="./Run" asp-route-id="@job.Id">← Monitor PostgreSQL recovery</a>
+
+<div class="footer"><a class="secondary" asp-page="./Run" asp-route-id="@job.Id">Back</a>
+@if (Model.OpenBaoJob?.Status is not ("queued" or "running"))
+{
+    <a class="primary" asp-page="./Other" asp-route-id="@job.Id">@(Model.OpenBaoJob?.Stage == "openbao-restored" ? "Continue to other data" : "Skip for now")</a>
+}
+</div>

@@ -1,0 +1,5 @@
+@page "{id:guid}"
+@model FinishModel
+@{ ViewData["Title"] = "Recovery complete"; ViewData["Step"] = 9; ViewData["Status"] = "Database checked"; }
+<div class="statusicon">✓</div><h1>Recovery workflow complete</h1><p class="muted">The database passed recovery checks. Verify OpenBao, keys, application access and external storage before enabling dependent services. Confirm WAL archiving and take a new backup.</p>
+<a class="primary" asp-page="/Index">Start a new recovery</a>

@@ -25,6 +25,7 @@
     <Project Path="src/Full/AppHost/AppHostFull.csproj" />
     <Project Path="src/Full/Hosts/BackupService/BackupService.csproj" />
     <Project Path="src/Full/Hosts/WebAPI/WebAPIHost.csproj" />
+    <Project Path="src/Full/Hosts/BackupServiceNew/BackupServiceNew.csproj" />
     <Project Path="src/Full/Hosts/DataBridge/DataBridgeHost.csproj" />
     <Project Path="src/Full/Hosts/Worker/WorkerHost.csproj" />
     <Project Path="src/Full/Hosts/MediaProcessor/MediaProcessorHost.csproj" />

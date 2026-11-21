@@ -5,7 +5,8 @@ public sealed record CreateBackupJobRequest(
     string? Type,
     bool Scheduled = false,
     string? ScheduleKey = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string Mode = "physical", bool IncludeOpenBao = true, bool IncludeOpenBaoKeys = false, bool IncludeDataProtectionKeys = false);
 
 public sealed record VerifyBackupRequest(string? Label = null, bool Deep = false);
 
@@ -19,7 +20,13 @@ public sealed record BackupJobDto(
     string? ErrorMessage,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<string> Progress);
+    IReadOnlyList<string> Progress)
+{
+    public string? ResultSummary { get; init; }
+    public string? ActualType { get; init; }
+    public BackupInfoDto? Backup { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+}
 
 /// <summary>One backup in the pgBackRest repository (from `pgbackrest info`).</summary>
 public sealed record BackupInfoDto(
@@ -34,7 +41,11 @@ public sealed record BackupInfoDto(
     string? WalStop,
     bool HasError,
     bool OpenBaoExportPresent,
-    bool? KeyRingBackupPresent = null);
+    bool? KeyRingBackupPresent = null)
+{
+    public string Mode { get; init; } = "physical";
+    public IReadOnlyList<string>? Dependencies { get; init; }
+}
 
 public sealed record PitrWindowDto(DateTimeOffset? Earliest, DateTimeOffset? LatestApprox);
 
@@ -47,8 +58,12 @@ public sealed record BackupRepositoryDto(
     string? BackupDirectory = null,
     string? KeyRingPath = null);
 
+public sealed record BackupHealthDto(DateTimeOffset ObservedAt, bool Healthy, int WalReadySegments, long RepositoryFreeBytes, long DataFreeBytes, string? ArchiverStatistics, IReadOnlyList<string> Problems);
+
 public interface IBackupServiceClient
 {
+    Task<BackupHealthDto> GetHealthAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException("Backup health is not supported in this deployment.");
+    Task<BackupJobDto> MaintenanceAsync(string operation, CancellationToken cancellationToken = default) => throw new NotSupportedException("Backup maintenance is not supported in this deployment.");
     Task<BackupJobDto> CreateAsync(CreateBackupJobRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BackupJobDto>> ListJobsAsync(CancellationToken cancellationToken = default);
     Task<BackupJobDto?> GetJobAsync(Guid jobId, CancellationToken cancellationToken = default);

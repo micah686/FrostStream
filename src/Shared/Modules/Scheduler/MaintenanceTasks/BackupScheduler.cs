@@ -34,8 +34,9 @@ public sealed class BackupScheduler(
         {
             var type = context.TaskType.ToLowerInvariant() switch
             {
-                TaskTypeRegistry.BackupFull => "full",
-                TaskTypeRegistry.BackupDiff => "diff",
+                TaskTypeRegistry.BackupFull => BackupTypes.Full,
+                TaskTypeRegistry.BackupDiff => BackupTypes.Differential,
+                TaskTypeRegistry.BackupIncr => BackupTypes.Incremental,
                 _ => throw new InvalidOperationException($"Unsupported scheduled backup task type '{context.TaskType}'.")
             };
             var name = $"scheduled-{context.ScheduleKey}-{context.DueWindowUtc.ToDateTimeUtc():yyyyMMddHHmmss}";

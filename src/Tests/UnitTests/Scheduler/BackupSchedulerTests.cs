@@ -33,6 +33,20 @@ public sealed class BackupSchedulerTests
     }
 
     [Test]
+    public async Task Incremental_Schedule_Dispatches_An_Incremental_Backup()
+    {
+        var client = new FakeBackupServiceClient("completed", 1);
+        var scheduler = NewScheduler(client, new RecordingMessageBus());
+
+        await scheduler.QueueBackupAsync(Context("backup-incr"), CancellationToken.None);
+
+        var request = client.CreatedRequest.ShouldNotBeNull();
+        request.Type.ShouldBe("incr");
+        request.ScheduleKey.ShouldBe("backup-incr");
+        request.IdempotencyKey.ShouldBe("idem-1");
+    }
+
+    [Test]
     public async Task Failed_Backup_Notifies_Admin_And_Marks_Failure()
     {
         var client = new FakeBackupServiceClient(finalStatus: "failed", pollsUntilTerminal: 1);

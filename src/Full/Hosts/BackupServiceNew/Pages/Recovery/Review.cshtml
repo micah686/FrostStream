@@ -1,0 +1,139 @@
+@page "{id:guid}"
+@model ReviewModel
+@{
+    ViewData["Title"] = "Review & confirm";
+    ViewData["Step"] = 4;
+}
+<h1>Validate &amp; confirm</h1>
+<div asp-validation-summary="All" class="form-errors" role="alert"></div>
+@if (Model.Plan is not { } plan)
+{
+    <p class="lede">This plan is unavailable. Run readiness checks and choose a recovery source again.</p>
+    <a class="primary" asp-page="/Recovery/Readiness" asp-route-run="true">Back to readiness</a>
+}
+else if (plan.Backup.Mode == "logical")
+{
+    ViewData["RecoveryType"] = "Logical";
+    ViewData["Target"] = "All databases";
+    <div class="notice danger"><strong>This restores all databases in the backup</strong>Existing databases with matching names will be dropped and recreated. Keep application writers stopped and preserve an independent rollback copy.</div>
+    <dl class="facts"><div><dt>Pinned backup</dt><dd>@plan.Backup.Label</dd></div><div><dt>Target</dt><dd>All databases in the backup</dd></div><div><dt>Destination</dt><dd>@plan.Destination</dd></div><div><dt>Verification</dt><dd>Bundle hashes verified. All dumps will be checked again before replacement.</dd></div></dl>
+    <form method="post" asp-page-handler="Confirm" asp-route-id="@plan.Id" class="stack" data-confirmation>
+        <div class="field"><label asp-for="Stanza">Type RESTORE ALL to confirm</label><input asp-for="Stanza" required autocomplete="off" data-expected="RESTORE ALL" /></div>
+        <label class="ack"><input asp-for="Authorized" /> PostgreSQL is running, application writers are stopped, and I authorize replacing all databases in this backup.</label>
+        <button class="destructive" type="submit">Start logical restore</button>
+    </form>
+}
+else
+{
+    ViewData["Target"] = plan.Target?.ToString("u") ?? (plan.Mode == RecoveryMode.Latest ? "Latest available" : "Selected backup");
+    <p class="lede">Check the pinned source, restore destination and available evidence before starting.</p>
+    <section class="surface">
+        <h2>Recovery plan</h2>
+        <dl class="facts">
+            <div><dt>Pinned backup</dt><dd>@if (plan.Backup.Name is { } name) { <strong>@name</strong><br /> }<code>@plan.Backup.Label</code>
+                @if (plan.Backup.CompletedAt is { } completed)
+                {
+                    <br /><time datetime="@completed.ToString("O")" data-local-time>@RecoveryConsole.Time(completed.ToLocalTime())</time>
+                }
+            </dd></div>
+            <div><dt>Target</dt><dd>
+                @if (plan.Target is { } timestamp)
+                {
+                    <time datetime="@timestamp.ToString("O")">@RecoveryConsole.Time(timestamp)</time>
+                    <br /><span class="caption">Exact UTC target <code>@timestamp.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'")</code></span>
+                }
+                else
+                {
+                    @(plan.Mode == RecoveryMode.Latest ? "End of available archived WAL" : "Earliest consistent state of the pinned backup")
+                }
+            </dd></div>
+            <div><dt>Dependencies</dt><dd>@(plan.Backup.Dependencies is { Count: > 0 } dependencies ? string.Join(", ", dependencies) : "Standalone full backup")</dd></div>
+            <div><dt>Destination</dt><dd><code>@plan.Destination</code><br />PostgreSQL @plan.PostgresMajor · @RecoveryConsole.Bytes(plan.RequiredBytes) free required</dd></div>
+            <div><dt>Replacement</dt><dd>@(plan.Populated ? "Delta restore may replace or remove existing files. Preserving an independent PGDATA copy is recommended; without one, the original data may be lost." : "Restore into an empty PostgreSQL data directory.")</dd></div>
+            <div><dt>Excluded storage</dt><dd>OpenBao, media and other external application storage must be reconciled separately.</dd></div>
+        </dl>
+    </section>
+    <section class="surface" id="verification-evidence" data-evidence-active="@(Model.Archive?.Status is "queued" or "running" || Model.Checksum?.Status is "queued" or "running" ? "true" : "false")">
+        <h2>Verification evidence</h2>
+        <dl class="facts">
+            <div><dt>Backup metadata</dt><dd>Pinned source, dependency chain and major version checked.</dd></div>
+            <div><dt>Backup checksums</dt><dd>
+                @{ var checksumState = ReviewModel.EvidenceState(Model.Checksum, "checksum-passed"); }
+                <span class="pill @ReviewModel.EvidenceClass(checksumState)">@checksumState</span>
+                @if (Model.Checksum is { } checksum)
+                {
+                    <span>@(checksum.Observation ?? $"Checksum check {checksum.Status}.")</span>
+                    <a asp-page="./Run" asp-route-id="@checksum.Id">View check</a>
+                }
+                else
+                {
+                    <span>Unchecked.</span>
+                    <form class="inline-form" method="post" asp-page-handler="Checksum" asp-route-id="@plan.Id">
+                        <button class="secondary" type="submit">Check backup checksums</button>
+                    </form>
+                }
+            </dd></div>
+            <div><dt>Archive assessment</dt><dd>
+                <span class="pill warning">@plan.Wal.State</span>
+                <span>Archive coverage beyond the backup and recovery target reachability remain unknown.</span>
+                @if (Model.Archive is { } archive)
+                {
+                    var archiveState = ReviewModel.EvidenceState(archive, "archive-passed");
+                    <br /><span>WAL readability: </span><span class="pill @ReviewModel.EvidenceClass(archiveState)">@archiveState</span>
+                    <span>@(archive.Observation ?? archive.Error ?? $"WAL check {archive.Status}.")</span>
+                    <a asp-page="./Run" asp-route-id="@archive.Id">View check</a>
+                }
+                else
+                {
+                    <br /><span>@plan.Wal.Detail</span><br /><small>Observed @RecoveryConsole.Time(plan.Wal.ObservedAt.ToLocalTime())</small>
+                    <form class="inline-form" method="post" asp-page-handler="Archive" asp-route-id="@plan.Id">
+                        <button class="secondary" type="submit">Check WAL readability</button>
+                    </form>
+                }
+            </dd></div>
+            <div><dt>OpenBao companion</dt><dd>@(plan.Backup.OpenBaoExportPresent ? "Available for separate recovery" : "Missing. Database salvage can proceed with acknowledgement.")</dd></div>
+        </dl>
+    </section>
+    <div class="notice"><strong>Optional isolated recovery rehearsal</strong>Test this exact target without replacing production. Requires at least @RecoveryConsole.Bytes(plan.RequiredBytes) of additional space on the temporary volume.
+    @if (Model.Rehearsal is { } rehearsal)
+    {
+        <p>@rehearsal.Status · @rehearsal.Observation @rehearsal.Error</p><a asp-page="./Run" asp-route-id="@rehearsal.Id">View rehearsal progress</a>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="Rehearsal" asp-route-id="@plan.Id"><button class="secondary" type="submit">Run rehearsal</button></form>
+    }
+    </div>
+    <section class="surface confirmation">
+        <h2>Authorize the restore</h2>
+        <p class="notice">Restoration replaces the entire PostgreSQL cluster, including every other database hosted there.</p>
+        <form method="post" asp-page-handler="Confirm" asp-route-id="@plan.Id" class="stack" data-confirmation>
+            <div class="field">
+                <label asp-for="Stanza">Type the stanza name <code>@Model.StanzaName</code></label>
+                <input asp-for="Stanza" spellcheck="false" autocomplete="off" required data-expected="@Model.StanzaName" />
+            </div>
+            @if (plan.Populated)
+            {
+                <div class="field">
+                    <label asp-for="Rollback">Path to an independently preserved PGDATA copy</label>
+                    <input asp-for="Rollback" placeholder="/backups/rollback/pgdata" required aria-describedby="rollback-help" />
+                    <small id="rollback-help">Preserve a complete, independent copy before replacement. Use an absolute path mounted in BackupService on a separate volume.</small>
+                </div>
+            }
+            <label class="ack"><input asp-for="Authorized" /> PostgreSQL and all writers are stopped. I authorize replacing the entire cluster.</label>
+            @if (plan.Wal.State == CheckState.Unknown)
+            {
+                <label class="ack"><input asp-for="AcceptUnknownWal" /> I accept the remaining unknowns in WAL coverage and target reachability.</label>
+            }
+            @if (!plan.Backup.OpenBaoExportPresent)
+            {
+                <label class="ack"><input asp-for="AcceptMissingCompanion" /> I acknowledge the missing OpenBao companion and will reconcile secrets separately.</label>
+            }
+            <div class="actions">
+                <button id="restore-button" class="destructive" type="submit" disabled="@(Model.Archive?.Status is "queued" or "running" or "failed" || Model.Archive?.Stage == "archive-failed" || Model.Checksum?.Status is "queued" or "running" || Model.Checksum?.Stage == "checksum-failed")">Restore database files</button>
+                <span class="caption">Plan expires <time datetime="@plan.ExpiresAt.ToString("O")" data-local-time>@RecoveryConsole.Time(plan.ExpiresAt.ToLocalTime())</time></span>
+            </div>
+        </form>
+    </section>
+    <a class="quiet back-link" asp-page="./Choose" asp-route-mode="@(plan.Mode == RecoveryMode.Timestamp ? "time" : plan.Mode == RecoveryMode.Consistency ? "manual" : "latest")">← Choose recovery</a>
+}

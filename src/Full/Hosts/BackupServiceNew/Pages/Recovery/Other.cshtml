@@ -1,0 +1,15 @@
+@page "{id:guid}"
+@model OtherModel
+@{ ViewData["Title"] = "Other data"; ViewData["Step"] = 7; ViewData["RecoveryType"] = Model.Job.Plan.Backup.Mode == "logical" ? "Logical" : "Physical"; }
+<h1>Restore other data</h1><p class="lede">Select additional data from the companion bundle needed to bring your application back online.</p>
+<div asp-validation-summary="All" class="form-errors" role="alert"></div>
+<form method="post" class="stack">
+@foreach (var item in new[] { (Key: "openbao_keys", Name: "OpenBao keys"), (Key: ".dataprotection", Name: "ASP.NET Data Protection keys") })
+{
+    <label class="choice"><input type="checkbox" name="Items" value="@item.Key" disabled="@(!Model.Available.Contains(item.Key))" /><div class="choice-body"><h3>@item.Name</h3><p>@(Model.Available.Contains(item.Key) ? "Restore to the configured key directory. Matching files will be replaced." : "Not available in this backup bundle.")</p></div></label>
+}
+<div class="notice"><strong>Application configuration, secrets and other application data</strong>These are not included in the backup bundle format. Recover them from your independently preserved deployment and media backups.</div>
+<label class="ack"><input asp-for="Authorized" /> I have preserved a rollback copy, stopped dependent services, and authorize replacing the selected keys.</label>
+<div class="notice warn">The configured key destinations must be mounted writable. Review permissions and application access before enabling writers.</div>
+<div class="footer"><a class="secondary" asp-page="./OpenBao" asp-route-id="@Model.Id">Back</a><a class="secondary" asp-page="./Finish" asp-route-id="@Model.Id">Continue without restoring</a><button class="primary" type="submit" disabled="@(Model.Available.Length == 0)">Restore selected data</button></div>
+</form>

@@ -1,0 +1,149 @@
+@page
+@model ChooseModel
+@{
+    ViewData["Title"] = "Choose recovery";
+    ViewData["Step"] = 3;
+    ViewData["RecoveryType"] = Model.Kind == "logical" ? "Logical" : "Physical";
+    var modes = new[] {
+        (Id: "latest", Icon: "↻", Title: "Recover the latest available data", Text: "Use the newest eligible backup and replay available archived WAL."),
+        (Id: "time", Icon: "◷", Title: "Recover to a specific time", Text: "Use the newest eligible backup that completed by your target time."),
+        (Id: "manual", Icon: "▤", Title: "Recover a selected backup", Text: "Choose a backup and stop at its earliest consistent state.")
+    };
+}
+<h1>Choose recovery</h1>
+@if (!Model.Readiness.Ready)
+{
+    <p class="lede">Resolve the readiness blockers before selecting a recovery source.</p>
+    <partial name="_Readiness" model="Model.Readiness" />
+    <a class="secondary" asp-page="/Recovery/Readiness" asp-route-kind="@Model.Kind" asp-route-run="true">Back to readiness</a>
+}
+else if (Model.Kind == "logical")
+{
+    <div class="notice"><strong>All databases will be restored</strong>Every database in this backup will be replaced. PostgreSQL must remain running. Roles and privileges are managed separately.</div>
+    <div asp-validation-summary="All" class="form-errors" role="alert"></div>
+    <form method="post" class="stack"><input type="hidden" name="Kind" value="logical" />
+        <div class="field"><label asp-for="Label">Logical backup</label><select asp-for="Label" required>
+            @foreach (var backup in Model.LogicalInventory) { <option value="@backup.Label">@backup.Name · @backup.CompletedAt?.ToString("u") · @backup.Label</option> }
+        </select></div><button class="primary" type="submit">Validate selected backup</button>
+    </form>
+}
+else
+{
+    <p class="lede">Choose the state you want PostgreSQL to recover to.</p>
+    <nav class="options" aria-label="Recovery methods">
+        @foreach (var mode in modes)
+        {
+            <a class="option @(Model.SelectedMode == mode.Id ? "selected" : "")" asp-page="./Choose" asp-route-mode="@mode.Id"
+               aria-current="@(Model.SelectedMode == mode.Id ? "true" : null)">
+                <span class="feature-mark" aria-hidden="true">@mode.Icon</span>
+                <strong>@mode.Title</strong><span>@mode.Text</span>
+            </a>
+        }
+    </nav>
+    <div asp-validation-summary="All" class="form-errors" role="alert"></div>
+    @if (Model.SelectedMode is "latest" or "time")
+    {
+        <section class="surface">
+            <form method="post" class="stack">
+                <input type="hidden" name="Mode" value="@Model.SelectedMode" />
+                @if (Model.SelectedMode == "time")
+                {
+                    <div class="field">
+                        <label asp-for="Target">Recovery timestamp</label>
+                        <input asp-for="Target" placeholder="2026-11-20T09:30:00-08:00" required maxlength="40" aria-describedby="timestamp-help" />
+                        <small id="timestamp-help">Enter local time with its UTC offset, or use Z for UTC. PostgreSQL will pause at the target for inspection.</small>
+                    </div>
+                }
+                else
+                {
+                    <p>FrostStream will pin a backup for review. Replay continues through the WAL PostgreSQL can retrieve when it starts.</p>
+                }
+                <div><button class="primary" type="submit">Review recovery plan <span aria-hidden="true">→</span></button></div>
+            </form>
+        </section>
+    }
+    else if (Model.Backups is { } backups)
+    {
+        <section aria-labelledby="inventory-title">
+            <div class="section-heading"><h2 id="inventory-title">Backup inventory</h2><span class="pill">@backups.Total @(backups.Total == 1 ? "result" : "results")</span></div>
+            <form method="get" asp-page="./Choose" class="filters">
+                <input type="hidden" name="mode" value="manual" />
+                <div class="field"><label asp-for="Query">Name or label</label><input asp-for="Query" type="search" maxlength="128" placeholder="Search backups" /></div>
+                <div class="field"><label asp-for="Type">Backup type</label>
+                    <select asp-for="Type"><option value="">All types</option><option value="full">Full</option><option value="diff">Differential</option><option value="incr">Incremental</option></select>
+                </div>
+                <div class="field"><label asp-for="From">From (UTC)</label><input asp-for="From" type="date" /></div>
+                <div class="field"><label asp-for="To">Through (UTC)</label><input asp-for="To" type="date" /></div>
+                <button class="secondary" type="submit">Apply filters</button>
+                <a asp-page="./Choose" asp-route-mode="manual" class="quiet clear-filter">Clear</a>
+            </form>
+            @if (backups.Total == 0)
+            {
+                <div class="surface"><p>No backups match these filters.</p></div>
+            }
+            <div class="backup-grid">
+                @foreach (var backup in backups.Items)
+                {
+                    <article class="backup-card">
+                        <div class="card-top">
+                            <span class="pill type-@backup.Type">@TypeName(backup.Type)</span>
+                            <span class="pill @(backup.HasError ? "danger" : "muted")">@(backup.HasError ? "Repository error" : "Integrity unchecked")</span>
+                        </div>
+                        <h3>@(backup.Name ?? backup.Label)</h3>
+                        @if (backup.Name != null) { <p class="backup-label">@backup.Label</p> }
+                        @if (backup.CompletedAt is { } time)
+                        {
+                            <time datetime="@time.ToString("O")" data-local-time>@RecoveryConsole.Time(time.ToLocalTime())</time>
+                        }
+                        <dl class="card-facts">
+                            <div><dt>Dependencies</dt><dd>@(backup.Dependencies is { Count: > 0 } refs ? $"{refs.Count} referenced backups" : backup.Type == BackupTypes.Full ? "Standalone full" : "Resolved during review")</dd></div>
+                            <div><dt>OpenBao</dt><dd>@(backup.OpenBaoExportPresent ? "Companion available" : "Companion missing")</dd></div>
+                        </dl>
+                        <details>
+                            <summary>Technical details</summary>
+                            <dl class="card-facts">
+                                <div><dt>Expanded size</dt><dd>@(backup.DatabaseSize is { } size ? RecoveryConsole.Bytes(size) : "Unknown")</dd></div>
+                                <div><dt>WAL start</dt><dd><code>@(backup.WalStart ?? "Unknown")</code></dd></div>
+                                <div><dt>WAL stop</dt><dd><code>@(backup.WalStop ?? "Unknown")</code></dd></div>
+                                @if (backup.Dependencies is { Count: > 0 } labels)
+                                {
+                                    <div><dt>Referenced labels</dt><dd><code>@string.Join(", ", labels)</code></dd></div>
+                                }
+                            </dl>
+                        </details>
+                        <form method="post" asp-page="./Choose" asp-route-mode="manual" asp-route-query="@Model.Query" asp-route-type="@Model.Type"
+                              asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+                              asp-route-number="@backups.Number">
+                            <input type="hidden" name="Mode" value="manual" />
+                            <input type="hidden" name="Label" value="@backup.Label" />
+                            <button type="submit" class="secondary" disabled="@backup.HasError">Review this backup <span aria-hidden="true">→</span></button>
+                        </form>
+                    </article>
+                }
+            </div>
+            @if (backups.TotalPages > 1)
+            {
+                <nav class="pagination" aria-label="Backup pages">
+                    @if (backups.Number > 1)
+                    {
+                        <a class="secondary" asp-page="./Choose" asp-route-mode="manual" asp-route-query="@Model.Query" asp-route-type="@Model.Type"
+                           asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+                           asp-route-number="@(backups.Number - 1)">← Previous</a>
+                    }
+                    <span>Page @backups.Number of @backups.TotalPages</span>
+                    @if (backups.Number < backups.TotalPages)
+                    {
+                        <a class="secondary" asp-page="./Choose" asp-route-mode="manual" asp-route-query="@Model.Query" asp-route-type="@Model.Type"
+                           asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+                           asp-route-number="@(backups.Number + 1)">Next →</a>
+                    }
+                </nav>
+            }
+            <p class="caption">Replaying all archived changes from an older backup can reintroduce unwanted changes. Selected-backup recovery replays only to consistency.</p>
+        </section>
+    }
+    <a class="quiet back-link" asp-page="/Recovery/Readiness" asp-route-kind="@Model.Kind">← Readiness</a>
+}
+@functions {
+    private static string TypeName(string type) => type switch { "full" => "Full", "diff" => "Differential", "incr" => "Incremental", _ => type };
+}

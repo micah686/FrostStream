@@ -1,0 +1,6 @@
+@page "/login"
+@model LoginModel
+@{ ViewData["Title"] = "Sign in"; }
+<div class="panel"><div class="eyebrow">Secure access</div><h1>Sign in to continue</h1><p class="muted">Enter the recovery console token to access your environment.</p>
+<form method="post" class="stack"><div asp-validation-summary="ModelOnly" class="form-errors" role="alert"></div><div class="field"><label asp-for="Token">BACKUP_RESTORE_UI_TOKEN</label><input asp-for="Token" type="password" placeholder="Enter your access token" autocomplete="current-password" maxlength="2048" required autofocus /></div><button class="primary" type="submit">Sign in to console</button></form>
+<div class="notice">Use your configured token, or find the <b>FROSTSTREAM RESTORE CONSOLE TOKEN</b> block in the BackupService startup log.</div></div>

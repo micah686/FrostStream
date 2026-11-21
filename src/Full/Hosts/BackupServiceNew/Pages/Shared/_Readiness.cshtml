@@ -1,0 +1,16 @@
+@model ReadinessReport
+<section class="checklist" aria-label="Prerequisite checks" aria-live="polite">
+    @foreach (var check in Model.Checks)
+    {
+        <div class="check-row">
+            <span class="check-symbol @check.State.ToString().ToLowerInvariant()" aria-hidden="true">@(check.State switch { CheckState.Passed => "✓", CheckState.Failed => "×", CheckState.Unknown => "?", CheckState.Running => "↻", _ => "·" })</span>
+            <div><strong>@check.Name</strong><p>@check.Detail</p>
+            @if (check.State is CheckState.Failed or CheckState.Unknown) { <p class="remediation">@check.Remediation</p> }</div>
+            <span class="check-state">@check.State</span>
+        </div>
+    }
+</section>
+@if (Model.Checks.Count > 0 && Model.Checks.All(check => check.State != CheckState.Pending))
+{
+    <p class="caption">Last checked <time datetime="@Model.Checks[^1].ObservedAt.ToString("O")">@RecoveryConsole.Time(Model.Checks[^1].ObservedAt.ToLocalTime())</time></p>
+}

@@ -19,6 +19,9 @@ public sealed class BackupServiceOptions
     public string PostgresHost { get; init; } = "localhost";
     public int PostgresPort { get; init; } = 5432;
     public string PostgresUser { get; init; } = "postgres";
+    public string? OpenBaoKeysPath { get; init; }
+    public string? DataProtectionKeysPath { get; init; }
+
     public string? PostgresPassword { get; init; }
 
     /// <summary>Databases a deep verify requires to exist in the restored cluster.</summary>

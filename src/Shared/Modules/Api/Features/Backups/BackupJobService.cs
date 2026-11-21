@@ -9,14 +9,25 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
     public async Task<BackupJobResponse> StartBackupAsync(
         string? name,
         string? type,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string mode = "physical", bool includeOpenBao = true, bool includeOpenBaoKeys = false, bool includeDataProtectionKeys = false)
     {
-        type = type?.Trim().ToLowerInvariant() ?? "full";
-        if (!(type == "full" && capabilities.Backups.Full || type == "diff" && capabilities.Backups.Differential))
+        if (mode is not ("logical" or "physical")) throw new ArgumentException("Unknown backup mode.");
+        if (mode == "logical" && capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Logical backups require PostgreSQL.");
+        type = BackupTypes.Normalize(type);
+        var supported = type switch
+        {
+            BackupTypes.Full => capabilities.Backups.Full,
+            BackupTypes.Differential => capabilities.Backups.Differential,
+            BackupTypes.Incremental => capabilities.Backups.Incremental,
+            _ => false
+        };
+        if (!supported)
             throw new NotSupportedException(capabilities.Backups.Provider == "SQLite"
-                ? "Lite supports full SQLite snapshots only; differential and point-in-time backups are not supported."
+                ? "Lite supports full SQLite snapshots only."
                 : $"Backup type '{type}' is not supported in this deployment.");
-        return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
+        if (capabilities.Backups.Provider == "PostgreSQL")
+            name = BackupTypes.ValidateName(name);
+        return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type, Mode: mode, IncludeOpenBao: includeOpenBao, IncludeOpenBaoKeys: includeOpenBaoKeys, IncludeDataProtectionKeys: includeDataProtectionKeys), cancellationToken));
     }
 
     public async Task<IReadOnlyList<BackupJobResponse>> ListJobsAsync(CancellationToken cancellationToken)
@@ -31,13 +42,21 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
         return new BackupRepositoryResponse(
             repository.RepositoryOk,
             repository.StatusMessage,
-            repository.Backups
-                .Select(x => new BackupSummaryResponse(
-                    x.Label, x.Type, x.Name, x.StartedAt, x.CompletedAt, x.DatabaseSize, x.RepositorySize,
-                    x.WalStart, x.WalStop, x.HasError, x.OpenBaoExportPresent, x.KeyRingBackupPresent))
-                .ToArray(),
+            repository.Backups.Select(ToResponse).ToArray(),
             new PitrWindowResponse(repository.PitrWindow.Earliest, repository.PitrWindow.LatestApprox),
             repository.DatabasePath, repository.BackupDirectory, repository.KeyRingPath);
+    }
+
+    public Task<BackupHealthDto> GetHealthAsync(CancellationToken cancellationToken)
+    {
+        if (capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Backup health is only available for PostgreSQL.");
+        return client.GetHealthAsync(cancellationToken);
+    }
+
+    public async Task<BackupJobResponse> MaintenanceAsync(string operation, CancellationToken cancellationToken)
+    {
+        if (capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Backup maintenance is only available for PostgreSQL.");
+        return ToResponse(await client.MaintenanceAsync(operation, cancellationToken));
     }
 
     public async Task<BackupJobResponse> VerifyAsync(
@@ -55,5 +74,21 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
     private static BackupJobResponse ToResponse(BackupJobDto job)
         => new(
             job.JobId, job.Kind, job.Type, job.Status, job.Name, job.Label,
-            job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress);
+            job.ErrorMessage, job.CreatedAt, job.CompletedAt, job.Progress)
+        {
+            ResultSummary = job.ResultSummary,
+            ActualType = job.ActualType,
+            StartedAt = job.StartedAt,
+            Backup = job.Backup is { } backup ? ToResponse(backup) : null
+        };
+
+    private static BackupSummaryResponse ToResponse(BackupInfoDto backup)
+        => new(
+            backup.Label, backup.Type, backup.Name, backup.StartedAt, backup.CompletedAt, backup.DatabaseSize,
+            backup.RepositorySize, backup.WalStart, backup.WalStop, backup.HasError, backup.OpenBaoExportPresent,
+            backup.KeyRingBackupPresent)
+        {
+            Mode = backup.Mode,
+            Dependencies = backup.Dependencies
+        };
 }

@@ -1,23 +1,28 @@
 export type BackupJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
-export type BackupType = 'full' | 'diff';
+export type BackupType = 'full' | 'diff' | 'incr';
 
-export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore';
+export type BackupJobKind = 'backup' | 'verify-quick' | 'verify-deep' | 'restore' | 'check' | 'expire' | 'inspect-archive';
 
 export interface BackupJob {
   jobId: string;
   kind: BackupJobKind;
   type: BackupType | null;
+  resultSummary?: string | null;
+  actualType?: BackupType | null;
+  backup?: BackupInfo | null;
   status: BackupJobStatus;
   name: string | null;
   label: string | null;
   errorMessage: string | null;
   createdAt: string;
+  startedAt?: string | null;
   completedAt: string | null;
   progress: string[];
 }
 
 export interface BackupInfo {
+  mode?: 'logical' | 'physical';
   label: string;
   type: BackupType;
   name: string | null;
@@ -30,6 +35,7 @@ export interface BackupInfo {
   hasError: boolean;
   openBaoExportPresent: boolean;
   keyRingBackupPresent?: boolean | null;
+  dependencies?: string[] | null;
 }
 
 export interface PitrWindow {
@@ -47,14 +53,26 @@ export interface BackupRepository {
   keyRingPath?: string | null;
 }
 
+export interface BackupHealth {
+  observedAt: string;
+  healthy: boolean;
+  walReadySegments: number;
+  repositoryFreeBytes: number;
+  dataFreeBytes: number;
+  archiverStatistics: string | null;
+  problems: string[];
+}
+
 const BASE = '/api/global/backups';
 
 export async function startBackup(
   name?: string,
   type: BackupType = 'full',
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  mode: 'logical' | 'physical' = 'physical',
+  artifacts = { includeOpenBao: true, includeOpenBaoKeys: false, includeDataProtectionKeys: false }
 ): Promise<BackupJob> {
-  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, type }, fetchImpl);
+  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, type, mode, ...artifacts }, fetchImpl);
 }
 
 export async function listBackupJobs(fetchImpl: typeof fetch = fetch): Promise<BackupJob[]> {
@@ -72,6 +90,14 @@ export async function verifyBackup(
   fetchImpl: typeof fetch = fetch
 ): Promise<BackupJob> {
   return sendJson<BackupJob>(`${BASE}/verify`, { label, deep }, fetchImpl);
+}
+
+export function getBackupHealth(fetchImpl: typeof fetch = fetch): Promise<BackupHealth> {
+  return getJson<BackupHealth>(`${BASE}/health`, fetchImpl);
+}
+
+export function runBackupMaintenance(operation: 'check' | 'expire' | 'inspect-archive', fetchImpl: typeof fetch = fetch): Promise<BackupJob> {
+  return sendJson<BackupJob>(`${BASE}/maintenance/${operation}`, {}, fetchImpl);
 }
 
 async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
@@ -110,3 +136,4 @@ async function describeError(response: Response, fallback: string): Promise<stri
     return text;
   }
 }
+

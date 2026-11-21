@@ -10,7 +10,8 @@ public static class StartBackupService
         IResourceBuilder<NatsServerResource> nats,
         PostgresResources postgres,
         OpenBaoResources openBao,
-        IResourceBuilder<ParameterResource> openBaoToken)
+        IResourceBuilder<ParameterResource> openBaoToken,
+        IResourceBuilder<ParameterResource> backupApiToken)
     {
         var backupRoot = BackupPaths.BackupRoot(sharedStorageRoot);
         Directory.CreateDirectory(backupRoot);
@@ -20,39 +21,34 @@ public static class StartBackupService
             builder.ExecutionContext.IsPublishMode ? "./backups" : backupRoot,
             publishValueAsDefault: true);
 
-        // Static token guarding the break-glass restore wizard; must not depend on Authentik,
-        // which is down during a restore. Same minting pattern as media-processor-api-key.
-        var restoreUiToken = builder.AddParameter(
-            "backup-restore-ui-token",
-            Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN") ?? "froststream-dev-restore-token",
-            publishValueAsDefault: false,
-            secret: true);
-
         var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
         // The central package/build props live at the repository root; Dockerfile source
         // paths are rooted under src/.
         var context = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", ".."));
         var service = builder
-            .AddDockerfile("backupservice", context, "src/Full/Hosts/BackupService/Dockerfile")
+            .AddDockerfile("backupservice", context, "src/Full/Hosts/BackupServiceNew/Dockerfile")
             .WithHttpEndpoint(port: Ports.BackupService, targetPort: 8080, name: "http")
             // Host-published restore wizard; usable while everything except this container is down.
             .WithHttpEndpoint(port: Ports.BackupRestoreUi, targetPort: 8081, name: "restore-ui")
-            .WithReference(nats).WaitFor(nats)
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
+            .WithReference(nats)
             .WithEnvironment("Backup__Directory", ContainerBackupRoot)
-            .WithEnvironment("Backup__Stanza", "froststream")
+            .WithEnvironment("Backup__Stanza", "main")
+            .WithEnvironment("Backup__ApiToken", backupApiToken)
             .WithEnvironment("Backup__PgDataPath", "/var/lib/postgresql/18/docker")
             .WithEnvironment("Backup__PostgresHost", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Host))
-            .WithEnvironment("Backup__PostgresPort", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Port))
+            .WithEnvironment("Backup__PostgresPort", "5432")
             .WithEnvironment("Backup__PostgresUser", postgres.User)
-            .WithEnvironment("Backup__PostgresPassword", postgres.Password)
+            .WithEnvironment("PGBACKREST_PG1_USER", postgres.User)
+            .WithEnvironment("PGPASSWORD", postgres.Password)
             .WithEnvironment("Backup__OpenBaoAddress", openBao.Server.GetEndpoint("http"))
             .WithEnvironment("Backup__OpenBaoToken", openBaoToken)
             .WithEnvironment("Backup__OpenBaoKvMount", "secret")
-            .WithEnvironment("Backup__RestoreUiToken", restoreUiToken)
+            .WithEnvironment("Backup__OpenBaoKeysPath", "/backup-sources/openbao-keys")
+            .WithEnvironment("Backup__DataProtectionKeysPath", "/backup-sources/dataprotection")
+            .WithPortableBindMount(OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot, builder.AppHostDirectory),
+                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}", "/backup-sources/openbao-keys", isReadOnly: false)
             // Ensures Aspire's compose publisher emits FROSTSTREAM_BACKUP_ROOT in .env.
             .WithEnvironment("Backup__HostRoot", backupRootParameter)
-            .WaitForOpenBao(openBao)
             .WithPortableBindMount(
                 backupRoot,
                 "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
@@ -66,6 +62,32 @@ public static class StartBackupService
             // cluster files directly, and connects over the shared unix socket.
             .WithVolume("froststream-postgres-data", "/var/lib/postgresql")
             .WithVolume("froststream-postgres-socket", "/var/run/postgresql");
+
+        if (builder.ExecutionContext.IsPublishMode)
+            service.WithVolume("froststream-data-protection-keys", "/backup-sources/dataprotection", isReadOnly: false);
+        else
+            service.WithBindMount(Path.Combine(sharedStorageRoot, "data-protection-keys"), "/backup-sources/dataprotection", isReadOnly: false);
+
+        // Blank values must reach BackupService so it generates a fresh per-run token.
+        // Never substitute a fixed development credential here.
+        var restoreToken = Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN");
+        if (builder.ExecutionContext.IsPublishMode && !string.IsNullOrWhiteSpace(restoreToken))
+        {
+            var parameter = builder.AddParameter("backup-restore-ui-token", restoreToken, publishValueAsDefault: false, secret: true);
+            service.WithEnvironment("BACKUP_RESTORE_UI_TOKEN", parameter);
+        }
+        else
+        {
+            service.WithEnvironment("BACKUP_RESTORE_UI_TOKEN", builder.ExecutionContext.IsPublishMode
+                ? "${BACKUP_RESTORE_UI_TOKEN:-}"
+                : string.IsNullOrWhiteSpace(restoreToken) ? "" : restoreToken);
+        }
+
+        if (builder.Resources.OfType<ContainerResource>().FirstOrDefault(resource => resource.Name == "backup-init") is { } backupInit)
+        {
+            service.WaitForCompletion(builder.CreateResourceBuilder(backupInit));
+            service.WithComposeDependencyCondition("backup-init", "service_completed_successfully");
+        }
 
         service.WithEndpoint("restore-ui", endpoint =>
         {
@@ -83,7 +105,7 @@ public static class StartBackupService
             compose.Build = new Aspire.Hosting.Docker.Resources.ServiceNodes.Build
             {
                 Context = "../../..",
-                Dockerfile = "src/Full/Hosts/BackupService/Dockerfile"
+                Dockerfile = "src/Full/Hosts/BackupServiceNew/Dockerfile"
             };
             compose.Healthcheck = new()
             {
@@ -94,7 +116,6 @@ public static class StartBackupService
                 StartPeriod = "20s"
             };
         });
-        service.WithComposeDependencyCondition("openbao", "service_healthy");
 
         return service;
     }
