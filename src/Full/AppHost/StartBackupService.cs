@@ -43,6 +43,10 @@ public static class StartBackupService
             .WithEnvironment("Backup__OpenBaoAddress", openBao.Server.GetEndpoint("http"))
             .WithEnvironment("Backup__OpenBaoToken", openBaoToken)
             .WithEnvironment("Backup__OpenBaoKvMount", "secret")
+            .WithEnvironment("Backup__OpenBaoKeysPath", "/backup-sources/openbao-keys")
+            .WithEnvironment("Backup__DataProtectionKeysPath", "/backup-sources/dataprotection")
+            .WithPortableBindMount(OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot, builder.AppHostDirectory),
+                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}", "/backup-sources/openbao-keys", isReadOnly: true)
             // Ensures Aspire's compose publisher emits FROSTSTREAM_BACKUP_ROOT in .env.
             .WithEnvironment("Backup__HostRoot", backupRootParameter)
             .WithPortableBindMount(
@@ -58,6 +62,11 @@ public static class StartBackupService
             // cluster files directly, and connects over the shared unix socket.
             .WithVolume("froststream-postgres-data", "/var/lib/postgresql")
             .WithVolume("froststream-postgres-socket", "/var/run/postgresql");
+
+        if (builder.ExecutionContext.IsPublishMode)
+            service.WithVolume("froststream-data-protection-keys", "/backup-sources/dataprotection", isReadOnly: true);
+        else
+            service.WithBindMount(Path.Combine(sharedStorageRoot, "data-protection-keys"), "/backup-sources/dataprotection", isReadOnly: true);
 
         var restoreToken = Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN");
         if (builder.ExecutionContext.IsPublishMode && !string.IsNullOrWhiteSpace(restoreToken))

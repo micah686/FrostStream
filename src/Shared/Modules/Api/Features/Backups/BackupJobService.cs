@@ -9,8 +9,10 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
     public async Task<BackupJobResponse> StartBackupAsync(
         string? name,
         string? type,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string mode = "physical", bool includeOpenBao = true, bool includeOpenBaoKeys = false, bool includeDataProtectionKeys = false)
     {
+        if (mode is not ("logical" or "physical")) throw new ArgumentException("Unknown backup mode.");
+        if (mode == "logical" && capabilities.Backups.Provider != "PostgreSQL") throw new NotSupportedException("Logical backups require PostgreSQL.");
         type = BackupTypes.Normalize(type);
         var supported = type switch
         {
@@ -25,7 +27,7 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
                 : $"Backup type '{type}' is not supported in this deployment.");
         if (capabilities.Backups.Provider == "PostgreSQL")
             name = BackupTypes.ValidateName(name);
-        return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type), cancellationToken));
+        return ToResponse(await client.CreateAsync(new CreateBackupJobRequest(name, type, Mode: mode, IncludeOpenBao: includeOpenBao, IncludeOpenBaoKeys: includeOpenBaoKeys, IncludeDataProtectionKeys: includeDataProtectionKeys), cancellationToken));
     }
 
     public async Task<IReadOnlyList<BackupJobResponse>> ListJobsAsync(CancellationToken cancellationToken)
@@ -86,6 +88,7 @@ public sealed class BackupJobService(IBackupServiceClient client, SystemCapabili
             backup.RepositorySize, backup.WalStart, backup.WalStop, backup.HasError, backup.OpenBaoExportPresent,
             backup.KeyRingBackupPresent)
         {
+            Mode = backup.Mode,
             Dependencies = backup.Dependencies
         };
 }

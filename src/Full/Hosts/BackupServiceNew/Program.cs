@@ -37,6 +37,7 @@ builder.Services.AddSingleton<ICommandRunner, ProcessRunner>();
 builder.Services.AddSingleton<PgBackRestClient>();
 builder.AddRecoveryConsole(settings.RestoreUiToken);
 builder.Services.AddSingleton<OpenBaoPairing>();
+builder.Services.AddSingleton<LogicalBackups>();
 builder.Services.AddSingleton<BackupRepository>();
 builder.Services.AddSingleton<BackupJobs>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupJobs>());

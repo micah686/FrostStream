@@ -15,6 +15,7 @@ internal sealed class BackupJobs(
     BackupServiceOptions settings,
     PgBackRestClient client,
     BackupRepository repository,
+    LogicalBackups logical,
     OpenBaoPairing openBao,
     RecoveryExecution recovery,
     IBackgroundRunReporter runReporter,
@@ -49,7 +50,7 @@ internal sealed class BackupJobs(
             if (job is null)
                 continue;
 
-            if (job.Status == "running" || IsRecovery(job) && job.Status == "queued")
+            if (job.Status == "running" || (IsRecovery(job)) && job.Status == "queued")
             {
                 // The wrapper assigns its operation annotation internally. An interrupted command
                 // may have committed a backup, so retain the idempotency key and never replay it.
@@ -170,7 +171,8 @@ internal sealed class BackupJobs(
 
     public async Task<BackupJobDto> QueueBackupAsync(CreateBackupJobRequest request, CancellationToken ct)
     {
-        var type = BackupTypes.Normalize(request.Type);
+        if (request.Mode is not ("logical" or "physical")) throw new ArgumentException("Unknown backup mode.");
+        var type = request.Mode == "logical" ? "full" : BackupTypes.Normalize(request.Type);
         var now = DateTimeOffset.UtcNow;
         var name = BackupTypes.ValidateName(request.Scheduled && string.IsNullOrWhiteSpace(request.Name)
             ? $"scheduled-{type}-{now:yyyyMMdd-HHmmss'Z'}" : request.Name);
@@ -181,7 +183,7 @@ internal sealed class BackupJobs(
         {
             if (key != null && jobs.Values.FirstOrDefault(job => job.IdempotencyKey == key) is { } existing)
             {
-                if (existing.Type != type || (existing.Name != name && !string.IsNullOrWhiteSpace(request.Name))
+                if (existing.IncludeOpenBao != request.IncludeOpenBao || existing.IncludeOpenBaoKeys != request.IncludeOpenBaoKeys || existing.IncludeDataProtectionKeys != request.IncludeDataProtectionKeys || existing.Mode != request.Mode || existing.Type != type || (existing.Name != name && !string.IsNullOrWhiteSpace(request.Name))
                     || existing.Scheduled != request.Scheduled || existing.ScheduleKey != request.ScheduleKey)
                 {
                     throw new ArgumentException("This idempotency key is already used by a different backup request.");
@@ -192,6 +194,10 @@ internal sealed class BackupJobs(
 
             return await EnqueueAsync(new Job(Guid.NewGuid(), "backup", now)
             {
+                IncludeOpenBao = request.IncludeOpenBao,
+                IncludeOpenBaoKeys = request.IncludeOpenBaoKeys,
+                IncludeDataProtectionKeys = request.IncludeDataProtectionKeys,
+                Mode = request.Mode,
                 Type = type,
                 Name = name,
                 Scheduled = request.Scheduled,
@@ -244,7 +250,12 @@ internal sealed class BackupJobs(
         liveProgress[job.Id] = progress;
         try
         {
-            if (job.Kind == "backup")
+            if (job.Kind == "backup" && job.Mode == "logical")
+            {
+                var backup = await logical.CreateAsync(job.Name!, job.Id, job.IncludeOpenBao, job.IncludeOpenBaoKeys, job.IncludeDataProtectionKeys, progress, ct);
+                await SaveAsync(jobs[job.Id] with { Label = backup.Label, Backup = backup });
+            }
+            else if (job.Kind == "backup")
                 await RunBackupAsync(jobs[job.Id], progress, ct);
             else if (IsRecovery(job))
                 await RunRecoveryAsync(jobs[job.Id], progress, ct);
@@ -360,7 +371,7 @@ internal sealed class BackupJobs(
             await run.ReportAsync(exportStep);
             try
             {
-                await openBao.ExportForBackupAsync(backup.Label, ct);
+                if (job.IncludeOpenBao) await openBao.ExportForBackupAsync(backup.Label, ct);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -371,6 +382,9 @@ internal sealed class BackupJobs(
             if (backup.Type != job.Type)
                 throw new InvalidOperationException($"pgBackRest created a {backup.Type} backup ({backup.Label}) after a {job.Type} backup was requested.");
 
+            progress.Add("Packaging physical repository, dependency chain, archived WAL and selected recovery artifacts.");
+            await logical.CreatePhysicalBundleAsync(repository.Describe(result.Produced), job.Id, options.RepositoryPath,
+                job.IncludeOpenBao, job.IncludeOpenBaoKeys, job.IncludeDataProtectionKeys, ct);
             run.Succeed($"Backup {backup.Label} completed.");
         }
         catch (Exception ex)
@@ -423,6 +437,39 @@ internal sealed class BackupJobs(
 
     private async Task RunVerifyAsync(Job job, JobProgress progress, CancellationToken ct)
     {
+        if (job.Label?.StartsWith("backup-", StringComparison.Ordinal) == true)
+        {
+            await logical.VerifyAsync(job.Label, job.Kind == "verify-deep", progress, ct);
+            progress.ResultSummary = "Logical backup verification passed.";
+            return;
+        }
+        if (job.Label is not null && logical.FindPhysicalBundle(job.Label) is { } bundle)
+        {
+            await logical.VerifyAsync(Path.GetFileName(bundle), false, progress, ct);
+            var scratch = Path.Combine(Path.GetTempPath(), "physical-bundle-verify-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(scratch);
+            var canDeleteScratch = true;
+            try
+            {
+                var bundledClient = new PgBackRestClient(options with
+                {
+                    RepositoryPath = Path.Combine(bundle, "postgres_physical", "pgbackrest"),
+                    StatePath = Path.Combine(scratch, "state"), ConfigPath = Path.Combine(scratch, "pgbackrest.conf")
+                });
+                await bundledClient.WriteConfigurationAsync(ct);
+                await bundledClient.VerifyAsync(job.Label, progress, ct);
+                if (job.Kind == "verify-deep")
+                {
+                    canDeleteScratch = false;
+                    var result = await bundledClient.TestRestoreAsync(new ScratchRequest(Path.Combine(scratch, "restore"), job.Label, settings.ExpectedDatabases), progress, ct);
+                    canDeleteScratch = result.CleanedUp;
+                    if (!result.CleanedUp) throw new InvalidOperationException("Temporary restore cleanup failed.");
+                }
+                progress.ResultSummary = job.Kind == "verify-deep" ? "Bundle hashes and temporary physical restore passed." : "Bundle hashes and repository checksums passed.";
+            }
+            finally { if (canDeleteScratch) Directory.Delete(scratch, true); }
+            return;
+        }
         await client.VerifyAsync(job.Label, progress, ct);
         progress.ResultSummary = job.Label is null
             ? "Repository checksum verification passed."
@@ -478,6 +525,10 @@ internal sealed class BackupJobs(
         public string? ResultSummary { get; init; }
         public string Status { get; init; } = "queued";
         public string? Name { get; init; }
+        public bool IncludeOpenBao { get; init; } = true;
+        public bool IncludeOpenBaoKeys { get; init; }
+        public bool IncludeDataProtectionKeys { get; init; }
+        public string Mode { get; init; } = "physical";
         public string? Type { get; init; }
         public string? Label { get; init; }
         public BackupInfoDto? Backup { get; init; }

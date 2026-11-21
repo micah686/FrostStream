@@ -4,7 +4,7 @@
   const capabilities = $derived(page.data.capabilities.backups);
   const lite = $derived(page.data.lite);
   const deepVerification = $derived(capabilities.deepVerification ?? capabilities.pointInTimeRecovery);
-  import { Modal, Select } from '#lib/components/ui/index.js';
+  import { Modal } from '#lib/components/ui/index.js';
   import {
     CircleAlert,
     CircleCheck,
@@ -48,6 +48,11 @@
   const JOBS_PER_PAGE = 10;
 
   // Run backup
+  let createModalOpen = $state(false);
+  let backupMode = $state<'logical' | 'physical'>('physical');
+  let includeOpenBao = $state(true);
+  let includeOpenBaoKeys = $state(false);
+  let includeDataProtectionKeys = $state(false);
   let backupName = $state('');
   let backupType = $state<BackupType>('full');
   let startBusy = $state(false);
@@ -103,7 +108,7 @@
     ] : [])
   ]);
   const backupIssues = $derived(repository?.backups.filter((backup) =>
-    backup.hasError || (lite ? backup.keyRingBackupPresent === false : !backup.openBaoExportPresent)).length ?? 0);
+    backup.hasError || (lite && backup.keyRingBackupPresent === false)).length ?? 0);
   const walState = $derived.by(() => {
     if (!health || healthError || !health.archiverStatistics) return 'Unknown';
     try {
@@ -132,11 +137,7 @@
       name: 'WAL archiving', description: 'Shows current PostgreSQL archiver settings and unresolved failures. The backlog counts WAL segments waiting to be archived.', state: walState,
       detail: health ? health.walReadySegments + ' segments awaiting archival' : 'Waiting for archiver statistics'
     }] : []),
-    ...(capabilities.pointInTimeRecovery ? [{
-      name: 'PITR coverage', description: 'Point-in-time recovery coverage requires assessment of WAL continuity and recovery target reachability. A recovery window estimate alone leaves coverage unknown.', state: 'Unknown',
-      detail: repository?.pitrWindow.earliest ? 'Estimated start ' + formatDate(repository.pitrWindow.earliest)
-        : 'Recovery window has not been established'
-    }] : [])
+
   ]);
 
   function statusColor(state: string) {
@@ -217,8 +218,9 @@
     startBusy = true;
     startError = null;
     try {
-      const job = await startBackup(backupName, backupType);
+      const job = await startBackup(backupName, backupMode === 'logical' ? 'full' : backupType, fetch, backupMode, { includeOpenBao, includeOpenBaoKeys, includeDataProtectionKeys });
       backupName = '';
+      createModalOpen = false;
       mergeJob(job);
     } catch (err) {
       startError = err instanceof Error ? err.message : 'Could not start the backup.';
@@ -334,8 +336,8 @@
       Full SQLite snapshots cover application data, workflow and queue state, staged objects, and encrypted secrets.
       Media files and optional ClickHouse data are managed separately.
     {:else}
-      pgBackRest backups cover the FrostStream, Authentik, and OpenFGA databases plus OpenBao secrets, with continuous
-      WAL archiving for point-in-time recovery. Media files and rebuildable search or queue state are excluded.
+      Choose logical database dumps or a physical PostgreSQL backup, and select the recovery artifacts to include.
+      Media files and rebuildable search or queue state are excluded.
     {/if}
   </p>
 
@@ -347,40 +349,9 @@
     </dl>
   {/if}
 
-  {#if startError}
-    <div class="alert alert-error mt-5 text-sm" role="alert">
-      <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{startError}</span>
-    </div>
-  {/if}
-
-  <form onsubmit={runBackup} class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-    <div class="min-w-0 flex-1 sm:max-w-xs">
-      <label class="label mb-2 text-sm" for="backup-name">{lite ? 'Backup name (optional)' : 'Backup name'}</label>
-      <input class="input w-full" id="backup-name" maxlength={lite ? 100 : 128} required={!lite} bind:value={backupName} placeholder="pre-upgrade" />
-    </div>
-    <div class="min-w-0 flex-1 sm:max-w-sm">
-      <label class="label mb-2 text-sm" for="backup-type">Type</label>
-      <Select id="backup-type" bind:value={backupType} items={backupTypeOptions} />
-    </div>
-    <button class="btn btn-sm btn-primary text-xs sm:-translate-y-1" type="submit" disabled={startBusy || !capabilities.full}>
-      {#if startBusy}
-        <span class="loading loading-spinner loading-xs mr-1.5"></span>
-      {:else}
-        <Play class="mr-1.5 h-4 w-4" />
-      {/if}
-      Run backup now
-    </button>
-  </form>
-  {#if lite}
-    <p class="mt-3 text-sm text-base-content/70">Full snapshots include the complete SQLite database.</p>
-  {:else}
-    <dl class="mt-4 grid gap-2 text-sm text-base-content/70 sm:grid-cols-3">
-      {#if capabilities.full}<div><dt class="font-semibold text-base-content">Full</dt><dd>Copies the entire PostgreSQL cluster.</dd></div>{/if}
-      {#if capabilities.differential}<div><dt class="font-semibold text-base-content">Differential</dt><dd>Copies changes since the latest full backup.</dd></div>{/if}
-      {#if capabilities.incremental}<div><dt class="font-semibold text-base-content">Incremental</dt><dd>Copies changes since the latest backup.</dd></div>{/if}
-    </dl>
-  {/if}
+  <button class="btn btn-sm btn-primary mt-4" disabled={!capabilities.full} onclick={() => { startError = null; createModalOpen = true; }}>
+    <Play class="h-4 w-4" />Create Backup
+  </button>
 </section>
 
 <!-- Jobs -->
@@ -465,6 +436,29 @@
   {/if}
 </section>
 
+{#if !lite}
+<section class={cardClass} aria-labelledby="postgres-status-title">
+  <div class="flex items-center justify-between gap-3">
+    <h2 id="postgres-status-title" class="text-base font-bold">PostgreSQL server status</h2>
+    <button class="btn btn-xs btn-neutral" onclick={() => void loadHealth()}>Refresh status</button>
+  </div>
+  <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
+    <span class="badge badge-sm {statusColor(walState)}">{walState}</span>
+    <span>{health?.walReadySegments ?? '—'} WAL segments awaiting archival</span>
+    <span>{formatSize(health?.dataFreeBytes ?? null)} database space available</span>
+  </div>
+  <div class="mt-3 divide-y divide-base-300">
+    {#each recentRepositoryChecks.filter(check => check.operation !== 'verify') as check}
+      <div class="flex flex-wrap items-center gap-3 py-2">
+        <span class="text-sm font-semibold">{check.name}</span>
+        <span class="text-xs text-base-content/70">{check.job?.errorMessage ?? check.job?.resultSummary ?? check.job?.status ?? 'Not run'}</span>
+        <button class="btn btn-xs btn-neutral ml-auto" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance(check.operation)}>Run check</button>
+      </div>
+    {/each}
+  </div>
+</section>
+{/if}
+
 <!-- Repository -->
 <section class={cardClass} aria-labelledby="backups-repo-title">
   <div class="flex flex-wrap items-start justify-between gap-4">
@@ -474,70 +468,21 @@
     </div>
   </div>
 
-  <div class="mt-5 grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite">
-    {#each repositoryStatuses as status, index (status.name)}
-      <article class="flex min-h-64 min-w-0 flex-col rounded-field border-[length:var(--border)] border-base-300 bg-base-200/30 p-4">
-        <div class="flex items-center gap-2">
-          <h3 class="text-sm font-semibold text-base-content">{status.name}</h3>
-          <div class="group relative">
-            <button type="button" class="grid h-5 w-5 place-items-center rounded-full border border-base-content/30 text-xs text-base-content/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={'About ' + status.name} aria-describedby={'status-help-' + index}>?</button>
-            <span id={'status-help-' + index} role="tooltip" class="invisible absolute right-0 top-7 z-20 w-56 rounded-field border border-base-300 bg-base-100 p-3 text-xs font-normal text-base-content shadow-lg group-hover:visible group-focus-within:visible">{status.description}</span>
-          </div>
-        </div>
-        <div class="mt-3">
-          <span class="badge badge-sm {statusColor(status.state)}">{status.state}</span>
-          <p class="mt-2 text-xs text-base-content/70">{status.detail}</p>
-        </div>
-        {#if status.name !== 'PITR coverage'}
-          <div class="mt-auto pt-4">
-            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={repositoryLoading} onclick={() => {
-              if (status.name !== 'WAL archiving') void loadRepository();
-              if (status.name !== 'Backups') void loadHealth();
-            }}>
-              <RefreshCw class="h-3.5 w-3.5 shrink-0" />Refresh status
-            </button>
-          </div>
-        {/if}
-      </article>
+  <div class="mt-4 divide-y divide-base-300 rounded-field border border-base-300" aria-live="polite">
+    {#each repositoryStatuses.filter(status => status.name === 'Backups') as status}
+      <div class="flex flex-wrap items-center gap-3 p-3">
+        <h3 class="text-sm font-semibold">Saved backups</h3>
+        <span class="badge badge-sm {statusColor(status.state)}">{status.state}</span>
+        <p class="text-xs text-base-content/70">{status.detail}</p>
+        <button class="btn btn-xs btn-neutral ml-auto" disabled={repositoryLoading} onclick={() => void loadRepository()}>Refresh repository</button>
+      </div>
     {/each}
-    {#each recentRepositoryChecks as check (check.name)}
-      <article class="flex min-h-64 min-w-0 flex-col rounded-field border-[length:var(--border)] border-base-300 bg-base-200/30 p-4">
-        <div class="flex items-center gap-2">
-          <h3 class="text-sm font-semibold text-base-content">{check.name}</h3>
-          <div class="group relative">
-            <button type="button" class="grid h-5 w-5 place-items-center rounded-full border border-base-content/30 text-xs text-base-content/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={'About ' + check.name} aria-describedby={'check-help-' + check.operation}>?</button>
-            <span id={'check-help-' + check.operation} role="tooltip" class="invisible absolute right-0 top-7 z-20 w-56 rounded-field border border-base-300 bg-base-100 p-3 text-xs font-normal text-base-content shadow-lg group-hover:visible group-focus-within:visible">{check.description}</span>
-          </div>
-        </div>
-        <div class="mt-3">
-          <span class="badge badge-sm {check.job ? statusBadgeClass(check.job.status) : 'badge-neutral'}">{check.job?.status ?? 'Not run'}</span>
-          {#if check.job}
-            <p class="mt-2 text-xs text-base-content/50">{check.job.completedAt ? 'Finished' : 'Queued'} {formatDate(check.job.completedAt ?? check.job.createdAt)}</p>
-            {#if check.job.errorMessage}<p class="mt-2 break-words text-xs text-error">{check.job.errorMessage}</p>{/if}
-            <p class="mt-3 break-words text-xs text-base-content/70">
-              {check.job.status === 'completed'
-                ? check.job.resultSummary ?? 'Check completed. Run it again to get a result summary.'
-                : check.job.status === 'running' ? 'Check in progress…'
-                : check.job.status === 'queued' ? 'Waiting to start.'
-                : 'The check could not complete. Review the error and job output.'}
-            </p>
-          {:else}
-            <p class="mt-2 text-xs text-base-content/50">No check recorded yet.</p>
-          {/if}
-        </div>
-        <div class="mt-auto pt-4">
-          {#if check.operation === 'verify'}
-            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={quickVerifyBusy || !capabilities.verification || (lite && !repository?.backups.length)} onclick={() => void runQuickVerify()}>
-              {#if quickVerifyBusy}<span class="loading loading-spinner loading-xs"></span>{:else}<ShieldCheck class="h-3.5 w-3.5" />{/if}
-              {lite ? 'Verify latest' : 'Quick verify'}
-            </button>
-          {:else}
-            <button class="btn btn-sm btn-neutral h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={maintenanceBusy || hasActiveJobs} onclick={() => void runMaintenance(check.operation)}>
-              {check.operation === 'check' ? 'Check archiving' : 'Inspect archived WAL'}
-            </button>
-          {/if}
-        </div>
-      </article>
+    {#each recentRepositoryChecks.filter(check => check.operation === 'verify') as check}
+      <div class="flex flex-wrap items-center gap-3 p-3">
+        <h3 class="text-sm font-semibold">Checksum verification</h3>
+        <span class="text-xs text-base-content/70">{check.job?.resultSummary ?? check.job?.status ?? 'Not run'}</span>
+        <button class="btn btn-xs btn-neutral ml-auto" disabled={quickVerifyBusy || !capabilities.verification || hasActiveJobs || (lite && !repository?.backups.length)} onclick={() => void runQuickVerify()}>Quick verify (hash)</button>
+      </div>
     {/each}
   </div>
 
@@ -596,7 +541,7 @@
                     {backup.label}
                   </h3>
                   <span class="badge badge-sm badge-accent text-[10px] font-semibold text-accent-content">
-                    {backupTypeNames[backup.type] ?? backup.type}
+                    {lite ? 'SQLite snapshot' : backup.mode === 'logical' ? 'Logical' : 'Physical · ' + (backupTypeNames[backup.type] ?? backup.type)}
                   </span>
                   {#if backup.name}
                     <span class="badge badge-sm badge-neutral text-[10px] font-semibold">{backup.name}</span>
@@ -607,9 +552,9 @@
                   {#if lite && backup.keyRingBackupPresent === false}
                     <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">missing recovery keys or manifest</span>
                   {/if}
-                  {#if !lite && !backup.openBaoExportPresent}
+                  {#if !lite && (backup.mode !== 'logical' && !backup.openBaoExportPresent)}
                     <span class="badge badge-sm badge-warning text-[10px] font-semibold text-warning-content">
-                      no secrets export
+                      OpenBao data not included
                     </span>
                   {/if}
                 </div>
@@ -625,6 +570,14 @@
 
             <div class="flex shrink-0 flex-wrap items-center gap-2 sm:ml-auto">
               <span class="badge badge-sm {verification.color}" title={verification.description} aria-label={'Verification status: ' + verification.name + '. ' + verification.description}>{verification.name}</span>
+              {#if !lite}
+                <button class={rowActionClass} disabled={hasActiveJobs || quickVerifyBusy} onclick={async () => {
+                  quickVerifyBusy = true;
+                  try { mergeJob(await verifyBackup(backup.label, false)); verifyError = null; }
+                  catch (error) { verifyError = error instanceof Error ? error.message : 'Verification failed.'; }
+                  finally { quickVerifyBusy = false; }
+                }}>Quick verify (hash)</button>
+              {/if}
               <button
                 type="button"
                 class={rowActionClass}
@@ -696,7 +649,7 @@
 
 <Modal bind:open={deepVerifyModalOpen} title="Deep verify backup?" size="md">
   <p class="break-all font-mono text-sm text-base-content">{selectedVerifyBackup?.label}</p>
-  <p class="mt-3 text-sm text-base-content/80">Verify this backup's checksums, restore it to a temporary directory, and start a temporary PostgreSQL instance to validate recovery. This may take time and requires disk space for the restored database.</p>
+  <p class="mt-3 text-sm text-base-content/80">Verify this backup's checksums and restore into a temporary PostgreSQL instance to validate recovery. This may take time and requires disk space for the restored database.</p>
   {#if verifyError}<p class="mt-3 text-sm text-error" role="alert">{verifyError}</p>{/if}
   {#snippet footer()}
     <div class="flex w-full flex-wrap justify-end gap-2">
@@ -707,4 +660,48 @@
       </button>
     </div>
   {/snippet}
+</Modal>
+
+<Modal bind:open={createModalOpen} title="Create Backup" size="md">
+  <form onsubmit={runBackup} class="space-y-4">
+    <div>
+      <label class="label" for="backup-name">Backup name{lite ? ' (optional)' : ''}</label>
+      <input class="input w-full" id="backup-name" maxlength={lite ? 100 : 128} required={!lite} bind:value={backupName} placeholder="pre-upgrade" />
+    </div>
+    {#if !lite}
+      <fieldset class="space-y-2">
+        <legend class="text-sm font-semibold">PostgreSQL backup</legend>
+        <label class="flex items-center gap-2"><input class="radio radio-sm" type="radio" bind:group={backupMode} value="logical" />Databases (logical)</label>
+        <label class="flex items-center gap-2"><input class="radio radio-sm" type="radio" bind:group={backupMode} value="physical" />Whole server (physical)</label>
+      </fieldset>
+      {#if backupMode === 'logical'}
+        <p class="text-sm text-base-content/70">Directory-format pg_dump backups of froststreamdb, authentikdb, and openfgadb.</p>
+      {:else}
+      <fieldset class="space-y-3">
+        <legend class="mb-2 text-sm font-semibold">Physical backup · PostgreSQL server</legend>
+        {#each backupTypeOptions as option}
+          <label class="flex items-start gap-3 rounded-field border border-base-300 p-3">
+            <input class="radio radio-sm mt-1" type="radio" name="backup-type" value={option.value} bind:group={backupType} />
+            <span class="text-sm"><strong>{option.name}</strong><span class="mt-1 block text-xs text-base-content/70">{option.value === 'full' ? 'Copies the entire PostgreSQL cluster.' : option.value === 'diff' ? 'Copies changes since the latest full backup. Requires that full backup to restore.' : 'Copies changes since the latest backup. Requires the full backup and its dependent backup chain to restore.'}</span></span>
+          </label>
+        {/each}
+      </fieldset>
+      {/if}
+    {/if}
+    {#if !lite}
+      <fieldset class="space-y-2 text-sm">
+        <legend class="mb-2 font-semibold">Recovery artifacts</legend>
+        <label class="flex items-center gap-2"><input type="checkbox" class="checkbox checkbox-sm" bind:checked={includeOpenBao} />OpenBao data</label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="checkbox checkbox-sm" bind:checked={includeOpenBaoKeys} />OpenBao keys</label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="checkbox checkbox-sm" bind:checked={includeDataProtectionKeys} />Data protection keys</label>
+      </fieldset>
+    {/if}
+    {#if startError}<p class="text-sm text-error" role="alert">{startError}</p>{/if}
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn btn-sm btn-ghost" disabled={startBusy} onclick={() => createModalOpen = false}>Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary" disabled={startBusy || !capabilities.full}>
+        {#if startBusy}<span class="loading loading-spinner loading-xs"></span>{/if}Create Backup
+      </button>
+    </div>
+  </form>
 </Modal>

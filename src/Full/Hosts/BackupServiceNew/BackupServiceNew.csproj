@@ -17,4 +17,5 @@
     <Compile Include="../BackupService/BackupServiceOptions.cs" Link="BackupServiceOptions.cs" />
     <Compile Include="../BackupService/PgBackRest/OpenBaoPairing.cs" Link="OpenBao/OpenBaoPairing.cs" />
   </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="BackupBundleTests" /></ItemGroup>
 </Project>

@@ -5,7 +5,7 @@ using Shared.Backups;
 
 namespace BackupServiceNew;
 
-internal sealed class BackupRepository(PgBackRestClient client, OpenBaoPairing openBao, WrapperOptions options)
+internal sealed class BackupRepository(PgBackRestClient client, OpenBaoPairing openBao, WrapperOptions options, LogicalBackups logical)
 {
     // pgBackRest info status codes for an empty or uninitialized stanza.
     private const int MissingStanzaPath = 1;
@@ -40,7 +40,7 @@ internal sealed class BackupRepository(PgBackRestClient client, OpenBaoPairing o
             ? "Create a full backup to start a backup chain."
             : repository.StatusMessage;
         return new BackupRepositoryDto(repository.StatusCode == 0, status,
-            repository.Backups.Select(Describe).ToArray(), new PitrWindowDto(null, null),
+            repository.Backups.Select(Describe).Concat(logical.List()).GroupBy(b => b.Label).Select(group => group.Last()).OrderBy(b => b.StartedAt).ToArray(), new PitrWindowDto(null, null),
             options.DataPath, options.RepositoryPath);
     }
 

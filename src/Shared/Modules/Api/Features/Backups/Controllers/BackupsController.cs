@@ -16,7 +16,7 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
         [FromBody] CreateBackupRequest? request,
         CancellationToken cancellationToken)
     {
-        var job = await backups.StartBackupAsync(request?.Name, request?.Type, cancellationToken);
+        var job = await backups.StartBackupAsync(request?.Name, request?.Type, cancellationToken, request?.Mode ?? "physical", request?.IncludeOpenBao ?? true, request?.IncludeOpenBaoKeys ?? false, request?.IncludeDataProtectionKeys ?? false);
         return AcceptedAtAction(nameof(GetJob), new { jobId = job.JobId }, job);
     }
 

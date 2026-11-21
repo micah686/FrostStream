@@ -5,7 +5,8 @@ public sealed record CreateBackupJobRequest(
     string? Type,
     bool Scheduled = false,
     string? ScheduleKey = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string Mode = "physical", bool IncludeOpenBao = true, bool IncludeOpenBaoKeys = false, bool IncludeDataProtectionKeys = false);
 
 public sealed record VerifyBackupRequest(string? Label = null, bool Deep = false);
 
@@ -42,6 +43,7 @@ public sealed record BackupInfoDto(
     bool OpenBaoExportPresent,
     bool? KeyRingBackupPresent = null)
 {
+    public string Mode { get; init; } = "physical";
     public IReadOnlyList<string>? Dependencies { get; init; }
 }
 

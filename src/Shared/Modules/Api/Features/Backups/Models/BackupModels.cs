@@ -1,6 +1,6 @@
 namespace WebAPI.Features.Backups.Models;
 
-public sealed record CreateBackupRequest(string? Name, string? Type);
+public sealed record CreateBackupRequest(string? Name, string? Type, string Mode = "physical", bool IncludeOpenBao = true, bool IncludeOpenBaoKeys = false, bool IncludeDataProtectionKeys = false);
 
 public sealed record BackupJobResponse(
     Guid JobId,
@@ -34,6 +34,7 @@ public sealed record BackupSummaryResponse(
     bool OpenBaoExportPresent,
     bool? KeyRingBackupPresent = null)
 {
+    public string Mode { get; init; } = "physical";
     public IReadOnlyList<string>? Dependencies { get; init; }
 }
 

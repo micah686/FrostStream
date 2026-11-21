@@ -22,6 +22,7 @@ export interface BackupJob {
 }
 
 export interface BackupInfo {
+  mode?: 'logical' | 'physical';
   label: string;
   type: BackupType;
   name: string | null;
@@ -67,9 +68,11 @@ const BASE = '/api/global/backups';
 export async function startBackup(
   name?: string,
   type: BackupType = 'full',
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  mode: 'logical' | 'physical' = 'physical',
+  artifacts = { includeOpenBao: true, includeOpenBaoKeys: false, includeDataProtectionKeys: false }
 ): Promise<BackupJob> {
-  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, type }, fetchImpl);
+  return sendJson<BackupJob>(BASE, { name: name?.trim() || null, type, mode, ...artifacts }, fetchImpl);
 }
 
 export async function listBackupJobs(fetchImpl: typeof fetch = fetch): Promise<BackupJob[]> {
@@ -133,3 +136,4 @@ async function describeError(response: Response, fallback: string): Promise<stri
     return text;
   }
 }
+
