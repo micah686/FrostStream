@@ -39,7 +39,7 @@ try {
     const { body } = render(Backups);
     assert.match(body, /Create Backup/);
     assert.match(body, /PostgreSQL server status/);
-    assert.match(body, /Restore logical databases/);
+    assert.match(body, /Restores run from the standalone restore console/);
     assert.doesNotMatch(body, /PITR coverage/);
     assert.match(body, /Open the restore console/);
     assert.doesNotMatch(body, /Shut down the Lite server/);

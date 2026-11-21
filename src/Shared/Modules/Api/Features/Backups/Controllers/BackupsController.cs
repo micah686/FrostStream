@@ -43,11 +43,15 @@ public sealed class BackupsController(BackupJobService backups) : ControllerBase
 
     [HttpGet("health")]
     [Endpoint(EndpointIds.BackupsHealth)]
+    [EndpointSummary("Get backup health")]
+    [EndpointDescription("Returns the current backup repository and database health, including available maintenance and archive status information.")]
     public async Task<ActionResult<Shared.Backups.BackupHealthDto>> Health(CancellationToken cancellationToken)
         => Ok(await backups.GetHealthAsync(cancellationToken));
 
     [HttpPost("maintenance/{operation}")]
     [Endpoint(EndpointIds.BackupsMaintenance)]
+    [EndpointSummary("Run backup maintenance")]
+    [EndpointDescription("Queues a supported repository maintenance operation: check, expire, or inspect-archive. Returns 400 for an unrecognized operation.")]
     public async Task<ActionResult<BackupJobResponse>> Maintenance(string operation, CancellationToken cancellationToken)
     {
         if (operation is not ("check" or "expire" or "inspect-archive")) return BadRequest();
