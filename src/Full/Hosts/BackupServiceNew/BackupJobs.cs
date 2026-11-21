@@ -123,12 +123,33 @@ internal sealed class BackupJobs(
         }
     }
 
+    public async Task<Guid> QueueOtherAsync(Guid id, string[] items, CancellationToken ct)
+    {
+        await admission.WaitAsync(ct);
+        try
+        {
+            if (GetRecovery(id) is not { Kind: "restore", Status: "completed", Stage: "database-validated" } database)
+                throw new InvalidOperationException("Complete database recovery first.");
+            if (jobs.Values.Any(job => job.Kind == "restore" && job.CreatedAt > database.CreatedAt))
+                throw new InvalidOperationException("A newer restore exists.");
+            if (GetPlanJob(id, "other") is { } existing) return existing.Id;
+            if (jobs.Values.Any(job => IsRecovery(job) && job.Status is "queued" or "running"))
+                throw new InvalidOperationException("Another recovery operation is running.");
+            if (items.Length == 0 || items.Except(logical.OtherData(database.Plan.Backup.Label)).Any())
+                throw new InvalidOperationException("Select available backup data.");
+            var jobId = Guid.NewGuid();
+            await EnqueueAsync(new Job(jobId, "other", DateTimeOffset.UtcNow) { Plan = database.Plan, Stage = "queued", OtherItems = items, CompanionHash = await logical.CompanionHashAsync(database.Plan.Backup.Label, ct) });
+            return jobId;
+        }
+        finally { admission.Release(); }
+    }
+
     public async Task QueueOpenBaoAsync(Guid id, CancellationToken ct)
     {
         await admission.WaitAsync(ct);
         try
         {
-            if (!jobs.TryGetValue(id, out var job) || job is not { Kind: "restore", Status: "completed", Stage: "database-validated", ReceiptId: { } receipt, Plan: { } plan })
+            if (!jobs.TryGetValue(id, out var job) || job is not { Kind: "restore", Status: "completed", Stage: "database-validated", Plan: { } plan })
                 throw new InvalidOperationException("Complete the PostgreSQL recovery check first.");
             if (jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > job.CreatedAt))
                 throw new InvalidOperationException("A newer restore exists. Use its recovery page.");
@@ -136,10 +157,10 @@ internal sealed class BackupJobs(
                 throw new InvalidOperationException("An OpenBao restore was already started for this recovery. Inspect its result before taking further action.");
             if (jobs.Values.Any(other => IsRecovery(other) && other.Status is "queued" or "running"))
                 throw new InvalidOperationException("Another recovery operation is running.");
-            if (!openBao.HasSnapshotExport(plan.Backup.Label))
+            if (plan.Backup.Mode != "logical" && !openBao.HasSnapshotExport(plan.Backup.Label))
                 throw new InvalidOperationException("The paired OpenBao snapshot is missing.");
-            var observation = await recovery.ObserveAsync(plan, receipt, job.TargetWasPaused, ct);
-            if (observation.Stage != "database-validated")
+            var observation = plan.Backup.Mode == "logical" ? null : await recovery.ObserveAsync(plan, job.ReceiptId ?? throw new InvalidOperationException("Missing restore receipt."), job.TargetWasPaused, ct);
+            if (observation is not null && observation.Stage != "database-validated")
                 throw new InvalidOperationException("PostgreSQL has not completed recovery. Run the recovery check again.");
             await EnqueueAsync(new Job(Guid.NewGuid(), "openbao", DateTimeOffset.UtcNow)
                 { Plan = plan, Label = plan.Backup.Label, Stage = "queued" });
@@ -294,21 +315,59 @@ internal sealed class BackupJobs(
     private async Task RunRecoveryAsync(Job job, JobProgress progress, CancellationToken ct)
     {
         var plan = job.Plan!;
+        if (job.Kind == "restore" && plan.Backup.Mode == "logical")
+        {
+            await using var lease = new FileStream(Path.Combine(options.StatePath, "operation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            if (plan.ExpiresAt <= DateTimeOffset.UtcNow || plan.ManifestHash != await logical.ManifestHashAsync(plan.Backup.Label, ct))
+                throw new InvalidOperationException("The logical plan expired or its source changed.");
+            await SaveAsync(jobs[job.Id] with { Stage = "restoring" });
+            progress.Add("Rechecking bundle integrity and PostgreSQL before restoring all databases.");
+            await logical.RestoreAsync(plan.Backup.Label, job.Id, progress, ct);
+            progress.Add("All databases restored and SQL checks passed.");
+            await SaveAsync(jobs[job.Id] with { Stage = "database-validated", Observation = "All databases restored. Validate application access before enabling writers.", ObservedAt = DateTimeOffset.UtcNow });
+            return;
+        }
+        if (job.Kind == "other")
+        {
+            await using var lease = new FileStream(Path.Combine(options.StatePath, "operation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            if (jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > GetRecovery(plan.Id)!.CreatedAt))
+                throw new InvalidOperationException("A newer restore exists.");
+            if (job.CompanionHash != await logical.CompanionHashAsync(plan.Backup.Label, ct))
+                throw new InvalidOperationException("The companion bundle changed after confirmation.");
+            await SaveAsync(jobs[job.Id] with { Stage = "restoring-other" });
+            progress.Add("Verifying companion bundle and restoring selected key files.");
+            await logical.RestoreOtherAsync(plan.Backup.Label, job.OtherItems, progress, ct);
+            progress.Add("Selected key files restored. Verify permissions and application access before enabling writers.");
+            await SaveAsync(jobs[job.Id] with { Stage = "other-restored" });
+            return;
+        }
         if (job.Kind == "openbao")
         {
             var database = GetRecovery(plan.Id);
-            if (database is not { Kind: "restore", Status: "completed", Stage: "database-validated", ReceiptId: { } databaseReceipt } ||
+            if (database is not { Kind: "restore", Status: "completed", Stage: "database-validated" } ||
                 jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > database.CreatedAt))
                 throw new InvalidOperationException("The database recovery is no longer current.");
-            var observed = await recovery.ObserveAsync(plan, databaseReceipt, jobs[plan.Id].TargetWasPaused, ct);
-            if (observed.Stage != "database-validated") throw new InvalidOperationException("PostgreSQL recovery is not complete.");
+            var observed = plan.Backup.Mode == "logical" ? null : await recovery.ObserveAsync(plan, database.ReceiptId ?? throw new InvalidOperationException("Missing receipt."), jobs[plan.Id].TargetWasPaused, ct);
+            if (observed is not null && observed.Stage != "database-validated") throw new InvalidOperationException("PostgreSQL recovery is not complete.");
             await SaveAsync(job with { Stage = "restoring-openbao" });
             progress.Add("Verifying the paired snapshot checksum and restoring OpenBao through its API.");
-            await openBao.RestoreSnapshotAsync(plan.Backup.Label, ct);
+            if (plan.Backup.Mode == "logical") await logical.RestoreOpenBaoAsync(plan.Backup.Label, ct);
+            else await openBao.RestoreSnapshotAsync(plan.Backup.Label, ct);
             await SaveAsync(jobs[job.Id] with { Stage = "openbao-restored", Observation = "OpenBao accepted the snapshot. Verify unseal state, authentication and application secrets before starting services.", ObservedAt = DateTimeOffset.UtcNow });
             return;
         }
 
+        if (job.Kind == "rehearsal")
+        {
+            if (plan.Backup.Mode == "logical") throw new InvalidOperationException("Rehearsal requires a physical plan.");
+            await SaveAsync(jobs[job.Id] with { Stage = "rehearsing" });
+            progress.Add("Rehearsing the pinned backup and exact recovery target in an isolated cluster.");
+            var result = await client.TestRestoreAsync(new ScratchRequest(Path.Combine(Path.GetTempPath(), "froststream-rehearsal"), plan.Backup.Label, settings.ExpectedDatabases)
+            { Mode = plan.Mode, Timestamp = plan.Target, MinimumFreeBytes = plan.RequiredBytes }, progress, ct);
+            if (!result.CleanedUp) throw new InvalidOperationException("Isolated rehearsal cleanup failed.");
+            await SaveAsync(jobs[job.Id] with { Stage = "rehearsed", Observation = "Pinned recovery target and SQL checks passed in isolation. Temporary cluster stopped and removed.", ObservedAt = DateTimeOffset.UtcNow });
+            return;
+        }
         if (job.Kind == "archive")
         {
             await SaveAsync(job with { Stage = "checking-archive" });
@@ -501,7 +560,7 @@ internal sealed class BackupJobs(
         StartedAt = job.StartedAt
     };
 
-    private static bool IsRecovery(Job job) => job.Kind is "restore" or "rehearsal" or "checksum" or "openbao" or "archive";
+    private static bool IsRecovery(Job job) => job.Kind is "restore" or "rehearsal" or "checksum" or "openbao" or "archive" or "other";
 
     private RecoveryJob DescribeRecovery(Job job) => new(job.Id, job.Kind, job.Status, job.Stage!, job.Plan!, job.CreatedAt,
         job.ReceiptId, job.Observation, job.ObservedAt, job.Error,
@@ -515,6 +574,8 @@ internal sealed class BackupJobs(
 
     private sealed record Job(Guid Id, string Kind, DateTimeOffset CreatedAt)
     {
+        public string? CompanionHash { get; init; }
+        public string[] OtherItems { get; init; } = [];
         public RecoveryPlan? Plan { get; init; }
         public string? Rollback { get; init; }
         public Guid? ReceiptId { get; init; }

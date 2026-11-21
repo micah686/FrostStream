@@ -1,6 +1,9 @@
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
+@inject BackupServiceNew.PgBackRestWrapper.WrapperOptions Options
 @{
     var step = (int?)ViewData["Step"] ?? 0;
-    var steps = new[] { "Check readiness", "Choose recovery", "Review & confirm", "Monitor recovery", "Restore OpenBao" };
+    var steps = new[] { "Recovery type", "Readiness", "Choose backup", "Validate & confirm", "Restore", "OpenBao", "Other data", "Restore other data" };
+    var pages = new[] { "/Index", "/Recovery/Readiness", "/Recovery/Choose" };
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -12,37 +15,59 @@
     <script src="/recovery.js" asp-append-version="true" defer></script>
 </head>
 <body>
-    <header class="masthead">
-        <div class="shell topbar">
-            <a class="brand" asp-page="/Index"><span class="brand-icon" aria-hidden="true">❄</span><span>FrostStream<span class="brand-sub">Recovery console</span></span></a>
-            @if (User.Identity?.IsAuthenticated == true)
-            {
-                <form method="post" asp-page="/Login" asp-page-handler="Logout"><button class="quiet" type="submit">Sign out</button></form>
-            }
-        </div>
-    </header>
-    @if (step > 0)
-    {
-        <div class="shell workspace">
-            <aside>
-                <nav aria-label="Recovery steps">
-                    <ol class="steps">
-                        @for (var i = 0; i < steps.Length; i++)
+@if (User.Identity?.IsAuthenticated != true)
+{
+    <main id="main" class="login">
+        <a class="brand" asp-page="/Index"><span class="brandicon" aria-hidden="true">◈</span><span>Recovery Console</span></a>
+        @RenderBody()
+    </main>
+}
+else
+{
+    <div class="app">
+        <aside class="sidebar">
+            <a class="brand" asp-page="/Index"><span class="brandicon" aria-hidden="true">◈</span><span class="brandtext">Recovery Console</span></a>
+            <div class="side-label">WORKSPACE</div>
+            <a class="side-item" asp-page="/Recovery/Readiness" aria-label="Overview"><span aria-hidden="true">▦</span><label>Overview</label></a>
+            <a class="side-item" asp-page="/Recovery/Choose" asp-route-mode="manual" aria-label="Backups"><span aria-hidden="true">◷</span><label>Backups</label></a>
+            <a class="side-item active" asp-page="/Index" aria-label="Recovery"><span aria-hidden="true">◉</span><label>Recovery</label></a>
+            <a class="side-item" href="/recovery/readiness#recent" aria-label="Activity log"><span aria-hidden="true">≡</span><label>Activity log</label></a>
+            <div class="side-label">SYSTEM</div>
+            <a class="side-item" asp-page="/Recovery/Settings" aria-label="Settings"><span aria-hidden="true">⚙</span><label>Settings</label></a>
+            <div class="side-bottom"><b>Recovery environment</b><br />@HostEnvironment.EnvironmentName<br /><span>Stanza: @Options.Stanza</span></div>
+        </aside>
+        <main id="main" class="main">
+            <div class="topbar"><div>Recovery workspace &nbsp; / &nbsp; <b>New recovery</b></div><div class="topright"><span class="env">@HostEnvironment.EnvironmentName</span><a asp-page="/Recovery/Settings">Help</a><form method="post" asp-page="/Login" asp-page-handler="Logout"><button class="quiet" type="submit">Sign out</button></form></div></div>
+            <div class="content">
+                <div class="page-head"><div><div class="eyebrow">Operations / Recovery</div><h1>Database recovery</h1><p class="muted">A guided workflow to restore your data with confidence.</p></div></div>
+                <nav class="steps" aria-label="Recovery steps">
+                    @for (var i = 0; i < steps.Length; i++)
+                    {
+                        var state = i + 1 == step ? "active" : i + 1 < step ? "done" : "";
+                        if (i < pages.Length && i + 1 < step && step < 5)
                         {
-                            <li class="@(i + 1 == step ? "current" : i + 1 < step ? "done" : "")" aria-current="@(i + 1 == step ? "step" : null)">
-                                <span class="step-marker" aria-hidden="true">@(i + 1 < step ? "✓" : (i + 1).ToString())</span><span>@steps[i]</span>
-                            </li>
+                            <a class="step @state" asp-page="@pages[i]" asp-route-kind="@(ViewData["RecoveryType"] as string == "Logical" ? "logical" : "physical")"><span class="stepnum">✓</span>@steps[i]</a>
                         }
-                    </ol>
+                        else
+                        {
+                            <span class="step @state" aria-current="@(i + 1 == step ? "step" : null)"><span class="stepnum">@(i + 1 < step ? "✓" : (i + 1).ToString())</span>@steps[i]</span>
+                        }
+                    }
                 </nav>
-                <p class="side-note">Service startup and recovery acceptance are operator-controlled.</p>
-            </aside>
-            <main id="main" class="main-panel">@RenderBody()</main>
-        </div>
-    }
-    else
-    {
-        <main id="main" class="login-wrap">@RenderBody()</main>
-    }
+                <div class="layout"><section class="panel workspace-panel">@RenderBody()</section>
+                    <aside><div class="panel aside"><h3>Recovery summary</h3><p>Your selections appear here as you progress.</p>
+                        <div class="kv"><span>Environment</span><b>@HostEnvironment.EnvironmentName</b></div>
+                        <div class="kv"><span>Stanza</span><b>@Options.Stanza</b></div>
+                        <div class="kv"><span>Recovery type</span><b>@(ViewData["RecoveryType"] ?? "Physical")</b></div>
+                        <div class="kv"><span>Target</span><b class="summary-value">@(ViewData["Target"] ?? "Not selected")</b></div>
+                        <div class="kv"><span>Status</span><b>@(ViewData["Status"] ?? "Planning")</b></div>
+                        <div class="help">ⓘ &nbsp; All times shown in UTC</div></div>
+                        <div class="notice"><strong>Need a safe starting point?</strong>Review each check and its guidance before continuing.</div>
+                    </aside>
+                </div>
+            </div>
+        </main>
+    </div>
+}
 </body>
 </html>

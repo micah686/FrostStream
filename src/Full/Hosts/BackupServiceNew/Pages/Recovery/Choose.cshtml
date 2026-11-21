@@ -2,7 +2,8 @@
 @model ChooseModel
 @{
     ViewData["Title"] = "Choose recovery";
-    ViewData["Step"] = 2;
+    ViewData["Step"] = 3;
+    ViewData["RecoveryType"] = Model.Kind == "logical" ? "Logical" : "Physical";
     var modes = new[] {
         (Id: "latest", Icon: "↻", Title: "Recover the latest available data", Text: "Use the newest eligible backup and replay available archived WAL."),
         (Id: "time", Icon: "◷", Title: "Recover to a specific time", Text: "Use the newest eligible backup that completed by your target time."),
@@ -14,7 +15,17 @@
 {
     <p class="lede">Resolve the readiness blockers before selecting a recovery source.</p>
     <partial name="_Readiness" model="Model.Readiness" />
-    <a class="secondary" asp-page="/Index" asp-route-run="true">Back to readiness</a>
+    <a class="secondary" asp-page="/Recovery/Readiness" asp-route-kind="@Model.Kind" asp-route-run="true">Back to readiness</a>
+}
+else if (Model.Kind == "logical")
+{
+    <div class="notice"><strong>All databases will be restored</strong>Every database in this backup will be replaced. PostgreSQL must remain running. Roles and privileges are managed separately.</div>
+    <div asp-validation-summary="All" class="form-errors" role="alert"></div>
+    <form method="post" class="stack"><input type="hidden" name="Kind" value="logical" />
+        <div class="field"><label asp-for="Label">Logical backup</label><select asp-for="Label" required>
+            @foreach (var backup in Model.LogicalInventory) { <option value="@backup.Label">@backup.Name · @backup.CompletedAt?.ToString("u") · @backup.Label</option> }
+        </select></div><button class="primary" type="submit">Validate selected backup</button>
+    </form>
 }
 else
 {
@@ -131,7 +142,7 @@ else
             <p class="caption">Replaying all archived changes from an older backup can reintroduce unwanted changes. Selected-backup recovery replays only to consistency.</p>
         </section>
     }
-    <a class="quiet back-link" asp-page="/Index">← Readiness</a>
+    <a class="quiet back-link" asp-page="/Recovery/Readiness" asp-route-kind="@Model.Kind">← Readiness</a>
 }
 @functions {
     private static string TypeName(string type) => type switch { "full" => "Full", "diff" => "Differential", "incr" => "Incremental", _ => type };

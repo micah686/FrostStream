@@ -190,6 +190,8 @@ public sealed partial class PgBackRestClient
     public Task<ScratchResult> TestRestoreAsync(ScratchRequest request, IProgress<OutputLine>? progress = null,
         CancellationToken cancellationToken = default) => Exclusive(async () =>
     {
+        if (request.Mode is not (RecoveryMode.Consistency or RecoveryMode.Latest or RecoveryMode.Timestamp))
+            throw new ArgumentException("Unsupported rehearsal recovery mode.");
         var started = DateTimeOffset.UtcNow;
         var root = Paths.Absolute(request.RootDirectory);
         foreach (var path in new[] { options.DataPath, options.RepositoryPath, options.StatePath, options.ConfigPath }) Paths.Disjoint(root, path);
@@ -202,7 +204,7 @@ public sealed partial class PgBackRestClient
         try
         {
             var receipt = await Restore(new RestoreRequest { Destination = data, ConfirmStanza = options.Stanza, ConfirmServerStopped = true,
-                BackupLabel = request.BackupLabel, Mode = RecoveryMode.Consistency }, progress, cancellationToken);
+                BackupLabel = request.BackupLabel, Mode = request.Mode, Timestamp = request.Timestamp, MinimumFreeBytes = request.MinimumFreeBytes }, progress, cancellationToken);
             var config = Path.Combine(directory, "postgresql.conf");
             static string Quote(string s) => "'" + s.Replace("'", "''") + "'";
             await File.WriteAllTextAsync(config, $"data_directory={Quote(data)}\nlisten_addresses=''\nunix_socket_directories={Quote(socket)}\nport=5432\narchive_mode=off\narchive_command=''\nssl=off\nshared_preload_libraries=''\nhot_standby=on\nhba_file={Quote(Path.Combine(directory, "pg_hba.conf"))}\nident_file={Quote(Path.Combine(directory, "pg_ident.conf"))}\n", cancellationToken);
@@ -222,12 +224,6 @@ public sealed partial class PgBackRestClient
             await Run(options.PgCtl, ["-D", data, "-l", Path.Combine(directory, "postgres.log"), "-w", "-t",
                 Math.Max(1, (int)options.RecoveryTimeout.TotalSeconds).ToString(CultureInfo.InvariantCulture), "-o", $"-c config_file={config}", "start"], cancellationToken, progress, timeout: options.RecoveryTimeout + TimeSpan.FromSeconds(10));
             var checks = new List<string>();
-            foreach (var db in request.ExpectedDatabases ?? [])
-            {
-                var result = await Sql("SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind IN ('r','p') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%';", db, socket, 5432, cancellationToken);
-                if (!long.TryParse(result.Output.Trim(), out var count) || count < 1) throw new InvalidOperationException($"No user tables found in expected database {db}.");
-                checks.Add($"{db}: {count} user tables");
-            }
             var assertions = request.Assertions is { Count: > 0 } ? request.Assertions : [new SqlAssertion("postgres", "SELECT 1;", "1")];
             using (var recoveryDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
@@ -240,6 +236,12 @@ public sealed partial class PgBackRestClient
                 } while (true);
             }
             if (receipt.Stage != RecoveryStage.Validated) throw new InvalidOperationException("Scratch PostgreSQL recovery has not completed.");
+            foreach (var db in request.ExpectedDatabases ?? [])
+            {
+                var result = await Sql("SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind IN ('r','p') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%';", db, socket, 5432, cancellationToken);
+                if (!long.TryParse(result.Output.Trim(), out var count) || count < 1) throw new InvalidOperationException($"No user tables found in expected database {db}.");
+                checks.Add($"{db}: {count} user tables");
+            }
             checks.AddRange(assertions.Select(a => $"SQL assertion passed in {a.Database}"));
             await Run(options.PgCtl, ["-D", data, "-m", "immediate", "-w", "stop"], CancellationToken.None, timeout: TimeSpan.FromSeconds(60));
             safeToDelete = true;

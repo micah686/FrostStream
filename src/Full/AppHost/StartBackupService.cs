@@ -46,7 +46,7 @@ public static class StartBackupService
             .WithEnvironment("Backup__OpenBaoKeysPath", "/backup-sources/openbao-keys")
             .WithEnvironment("Backup__DataProtectionKeysPath", "/backup-sources/dataprotection")
             .WithPortableBindMount(OpenBaoBootstrapPaths.HostRoot(sharedStorageRoot, builder.AppHostDirectory),
-                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}", "/backup-sources/openbao-keys", isReadOnly: true)
+                "${FROSTSTREAM_OPENBAO_BOOTSTRAP_ROOT:-./openbao-bootstrap}", "/backup-sources/openbao-keys", isReadOnly: false)
             // Ensures Aspire's compose publisher emits FROSTSTREAM_BACKUP_ROOT in .env.
             .WithEnvironment("Backup__HostRoot", backupRootParameter)
             .WithPortableBindMount(
@@ -64,10 +64,12 @@ public static class StartBackupService
             .WithVolume("froststream-postgres-socket", "/var/run/postgresql");
 
         if (builder.ExecutionContext.IsPublishMode)
-            service.WithVolume("froststream-data-protection-keys", "/backup-sources/dataprotection", isReadOnly: true);
+            service.WithVolume("froststream-data-protection-keys", "/backup-sources/dataprotection", isReadOnly: false);
         else
-            service.WithBindMount(Path.Combine(sharedStorageRoot, "data-protection-keys"), "/backup-sources/dataprotection", isReadOnly: true);
+            service.WithBindMount(Path.Combine(sharedStorageRoot, "data-protection-keys"), "/backup-sources/dataprotection", isReadOnly: false);
 
+        // Blank values must reach BackupService so it generates a fresh per-run token.
+        // Never substitute a fixed development credential here.
         var restoreToken = Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN");
         if (builder.ExecutionContext.IsPublishMode && !string.IsNullOrWhiteSpace(restoreToken))
         {
@@ -78,7 +80,7 @@ public static class StartBackupService
         {
             service.WithEnvironment("BACKUP_RESTORE_UI_TOKEN", builder.ExecutionContext.IsPublishMode
                 ? "${BACKUP_RESTORE_UI_TOKEN:-}"
-                : restoreToken ?? "");
+                : string.IsNullOrWhiteSpace(restoreToken) ? "" : restoreToken);
         }
 
         if (builder.Resources.OfType<ContainerResource>().FirstOrDefault(resource => resource.Name == "backup-init") is { } backupInit)

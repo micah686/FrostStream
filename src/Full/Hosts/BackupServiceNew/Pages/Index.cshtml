@@ -1,37 +1,10 @@
 @page "/"
 @model IndexModel
-@{
-    ViewData["Title"] = "Check readiness";
-    ViewData["Step"] = 1;
-    var observed = Model.Report.Checks.Any(check => check.State != CheckState.Pending);
-}
-<h1>Check readiness</h1>
-<p class="lede">Stop FrostStream writers and PostgreSQL on the host. Leave BackupService running, then check the shared volumes and backup repository.</p>
-<partial name="_Readiness" model="Model.Report" />
-<div class="actions">
-    <form method="get" data-readiness>
-        <input type="hidden" name="run" value="true" />
-        <button class="@(Model.Report.Ready ? "secondary" : "primary")" type="submit">@(observed ? "Run checks again" : "Run readiness checks")</button>
-    </form>
-    @if (Model.Report.Ready)
-    {
-        <a class="primary" asp-page="/Recovery/Choose">Choose recovery <span aria-hidden="true">→</span></a>
-    }
-</div>
-@if (Model.Recent.Length > 0)
-{
-    <section class="recent">
-        <h2>Recent restores</h2>
-        @foreach (var job in Model.Recent)
-        {
-            <a class="recent-row" asp-page="/Recovery/Run" asp-route-id="@job.Id">
-                <div><strong>@job.Plan.Backup.Label</strong><small>@RecoveryConsole.Time(job.CreatedAt.ToLocalTime())</small></div>
-                <span class="pill">@RunStatus(job)</span>
-            </a>
-        }
-    </section>
-}
-@functions {
-    private static string RunStatus(RecoveryJob job) => job.Status == "failed" ? "Needs attention" :
-        job.Stage switch { "database-validated" => "Database checked", "files-restored" => "Files restored", _ => job.Stage.Replace('-', ' ') };
-}
+@{ ViewData["Title"] = "Recovery type"; ViewData["Step"] = 1; ViewData["RecoveryType"] = "Not selected"; }
+<div class="section-head"><div><h2>Choose a recovery type</h2><p class="muted">Start by choosing what you need to restore.</p></div><span class="pill blue">STEP 1 OF 8</span></div>
+<form method="get" action="/recovery/readiness">
+<label class="choice selected"><input type="radio" name="kind" value="physical" checked /><div class="choice-body"><div class="choice-title"><h3>Physical restore</h3><span class="pill blue">Entire cluster</span></div><p>Restore the entire PostgreSQL cluster from a pgBackRest backup, with optional point-in-time recovery.</p></div></label>
+<label class="choice"><input type="radio" name="kind" value="logical" /><div class="choice-body"><div class="choice-title"><h3>Logical restore</h3><span class="pill blue">All databases</span></div><p>Restore all databases from a logical backup while PostgreSQL is running.</p></div></label>
+<div class="notice"><strong>Before you begin</strong>Make sure you have access to the backup repository and destination environment. We’ll check the prerequisites next.</div>
+<div class="footer"><span></span><button class="primary" type="submit">Continue</button></div>
+</form>

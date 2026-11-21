@@ -12,7 +12,7 @@ readinessForm?.addEventListener("submit", () => {
 
 const timeFormat = new Intl.DateTimeFormat(undefined, {
     year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    second: "2-digit", timeZoneName: "shortOffset"
+    second: "2-digit", timeZone: "UTC", timeZoneName: "short"
 });
 for (const time of document.querySelectorAll("[data-local-time]")) {
     const instant = new Date(time.dateTime);
@@ -42,7 +42,34 @@ if (document.querySelector("#verification-evidence")) {
             const updated = page.querySelector("#verification-evidence");
             const button = page.querySelector("#restore-button");
             if (updated) evidence.replaceWith(updated);
-            if (button && document.querySelector("#restore-button")) document.querySelector("#restore-button").disabled = button.disabled;
+            if (button && document.querySelector("#restore-button")) {
+                const current = document.querySelector("#restore-button");
+                current.dataset.serverBlocked = String(button.disabled);
+                updateConfirmation(current.form);
+            }
         } catch { /* The next poll can retry. */ }
     }, 5000);
 }
+
+for (const radio of document.querySelectorAll('.choice input[type="radio"]')) {
+    radio.addEventListener('change', () => {
+        for (const choice of document.querySelectorAll('.choice')) choice.classList.toggle('selected', !!choice.querySelector('input:checked'));
+    });
+}
+
+function updateConfirmation(form) {
+    if (!form) return;
+    const button = form.querySelector('button[type="submit"]');
+    const confirmation = form.querySelector('[data-expected]');
+    if (!button || !confirmation) return;
+    button.dataset.serverBlocked ??= String(button.disabled);
+    button.disabled = button.dataset.serverBlocked === "true" || confirmation.value !== confirmation.dataset.expected ||
+        [...form.querySelectorAll('.ack input[type="checkbox"]')].some(input => !input.checked) ||
+        [...form.querySelectorAll('input[required]')].some(input => !input.validity.valid);
+}
+for (const form of document.querySelectorAll('[data-confirmation]')) {
+    form.addEventListener('input', () => updateConfirmation(form));
+    form.addEventListener('change', () => updateConfirmation(form));
+    updateConfirmation(form);
+}
+document.querySelector('.step.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });

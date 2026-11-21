@@ -121,6 +121,110 @@ internal sealed class LogicalBackups(BackupServiceOptions settings, ICommandRunn
         }
     }
 
+    public async Task<string> ManifestHashAsync(string label, CancellationToken ct)
+    {
+        if (Path.GetFileName(label) != label || !label.StartsWith("backup-", StringComparison.Ordinal)) throw new ArgumentException("Invalid backup label.");
+        var directory = Path.Combine(Root, label);
+        Paths.NoLinks(directory);
+        return await Hash(Path.Combine(directory, "manifest.json"), ct);
+    }
+
+    public async Task ProbeRestoreAsync(CancellationToken ct)
+    {
+        var result = await runner.RunAsync(new CommandSpec("psql",
+            ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser,
+             "-X", "-A", "-t", "-w", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", "SELECT current_setting('data_directory');"], TimeSpan.FromSeconds(5)), cancellationToken: ct);
+        if (!result.Success) throw new InvalidOperationException("PostgreSQL must be running and accessible to the restore user.");
+        if (Paths.Absolute(result.Output.Trim()) != Paths.Absolute(settings.PgDataPath))
+            throw new InvalidOperationException("The PostgreSQL socket serves a different data directory than the configured destination.");
+    }
+
+    public async Task RestoreAsync(string label, Guid operationId, IProgress<OutputLine> progress, CancellationToken ct)
+    {
+        await VerifyAsync(label, false, progress, ct);
+        var directory = Path.Combine(Root, label);
+        var manifest = JsonSerializer.Deserialize<Manifest>(await File.ReadAllTextAsync(Path.Combine(directory, "manifest.json"), ct))!;
+        if (manifest.Backup.Mode != "logical" || manifest.Databases.Length == 0) throw new InvalidDataException("Not a logical database backup.");
+        foreach (var database in manifest.Databases)
+        {
+            if (Path.GetFileName(database) != database || database is "." or ".." or "postgres" or "template0" or "template1" || string.IsNullOrWhiteSpace(database) || database.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_' && c != '-'))
+                throw new InvalidDataException("Invalid restore database name.");
+            if (!manifest.Sha256.ContainsKey(Path.Combine("postgres_logical", database, "toc.dat"))) throw new InvalidDataException("Missing database dump.");
+        }
+        foreach (var database in manifest.Databases)
+            await Run("pg_restore", ["--list", Path.Combine(directory, "postgres_logical", database)], progress, ct);
+        await ProbeRestoreAsync(ct);
+        foreach (var database in manifest.Databases)
+        {
+            await Run("dropdb", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--if-exists", "--", database], progress, ct);
+            await Run("createdb", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--", database], progress, ct);
+            await Run("pg_restore", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--exit-on-error", "--no-owner", "--no-privileges", "-d", database, Path.Combine(directory, "postgres_logical", database)], progress, ct);
+            await Run("psql", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "-d", database, "-v", "ON_ERROR_STOP=1", "-c", "SELECT count(*) FROM pg_catalog.pg_class"], progress, ct);
+        }
+    }
+
+    private string BundleLabel(string label) => label.StartsWith("backup-", StringComparison.Ordinal) ? label
+        : Path.GetFileName(FindPhysicalBundle(label) ?? throw new InvalidOperationException("No companion bundle is available."));
+
+    public Task<string> CompanionHashAsync(string label, CancellationToken ct) => ManifestHashAsync(BundleLabel(label), ct);
+
+    public string[] OtherData(string label)
+    {
+        try
+        {
+            var directory = Path.Combine(Root, BundleLabel(label));
+            return new[] { "openbao_keys", ".dataprotection" }.Where(item => Directory.Exists(Path.Combine(directory, item))).ToArray();
+        }
+        catch (InvalidOperationException) { return []; }
+    }
+
+    public async Task RestoreOtherAsync(string label, string[] items, IProgress<OutputLine> progress, CancellationToken ct)
+    {
+        var bundle = BundleLabel(label);
+        await VerifyAsync(bundle, false, progress, ct);
+        var directory = Path.Combine(Root, bundle);
+        var copies = new List<(string Source, string Target)>();
+        foreach (var item in items.Distinct())
+        {
+            var destination = item switch
+            {
+                "openbao_keys" => settings.OpenBaoKeysPath,
+                ".dataprotection" => settings.DataProtectionKeysPath,
+                _ => throw new InvalidOperationException("Unsupported data selection.")
+            };
+            if (string.IsNullOrWhiteSpace(destination)) throw new InvalidOperationException("The restore destination is not configured.");
+            destination = Path.GetFullPath(destination);
+            Paths.Disjoint(destination, Root);
+            if (destination == Root || destination.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                throw new InvalidOperationException("A key destination cannot be inside the backup repository.");
+            Paths.NoLinks(destination);
+            Paths.Writable(destination);
+            var source = Path.Combine(directory, item);
+            if (!Directory.Exists(source)) throw new InvalidOperationException("The selected data is absent from the backup.");
+            foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            {
+                var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+                Paths.NoLinks(target);
+                copies.Add((file, target));
+            }
+        }
+        foreach (var (source, target) in copies)
+        {
+            ct.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: true);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(target, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    public async Task RestoreOpenBaoAsync(string label, CancellationToken ct)
+    {
+        var bundle = BundleLabel(label);
+        await VerifyAsync(bundle, false, new Progress<OutputLine>(), ct);
+        await new OpenBaoRaftSnapshot().RestoreFromFileAsync(OpenBaoOptions.From(settings),
+            Path.Combine(Root, bundle, "openbao", "snapshot.raft-snapshot"), ct);
+    }
+
     public string? FindPhysicalBundle(string label)
     {
         if (!Directory.Exists(Root)) return null;

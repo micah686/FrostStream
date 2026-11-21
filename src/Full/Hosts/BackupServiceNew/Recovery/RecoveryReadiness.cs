@@ -26,6 +26,53 @@ internal sealed class RecoveryReadiness(WrapperOptions options, PgBackRestClient
         new RecoveryCheck(name, CheckState.Pending, "Waiting for checks to start.", "", DateTimeOffset.UtcNow)).ToArray(),
         null, null, 0, false);
 
+    public async Task<ReadinessReport> CheckLogicalAsync(LogicalBackups logical, CancellationToken ct)
+    {
+        var checks = new List<RecoveryCheck>();
+        await Inspect("PostgreSQL is running", () => logical.ProbeRestoreAsync(ct), "Start PostgreSQL; stop application writers and verify database credentials.");
+        await Inspect("PID and socket evidence", () =>
+        {
+            if (!File.Exists(Path.Combine(options.DataPath, "postmaster.pid"))) throw new InvalidOperationException("The shared PGDATA has no PostgreSQL PID file.");
+            if (!Directory.Exists(options.SocketPath)) throw new InvalidOperationException("The PostgreSQL socket directory is unavailable.");
+            return Task.CompletedTask;
+        }, "Mount the same PostgreSQL data and socket volumes in both containers.");
+        await Inspect("Destination mount and permissions", () =>
+        {
+            if (FindMount(options.DataPath) is null) throw new InvalidOperationException("The PostgreSQL destination is outside a verifiable mounted volume.");
+            Paths.NoLinks(options.DataPath);
+            return Task.CompletedTask;
+        }, "Mount the PostgreSQL data volume in BackupService.");
+        await Inspect("Available disk space", () =>
+        {
+            if (Paths.FreeBytes(options.DataPath) < options.MinimumFreeBytes) throw new InvalidOperationException("Insufficient free space on the PostgreSQL volume.");
+            return Task.CompletedTask;
+        }, "Free space on the database volume before restoring.");
+        await Inspect("Repository access", () =>
+        {
+            var root = Path.GetDirectoryName(options.RepositoryPath)!;
+            Paths.NoLinks(root);
+            if (!Directory.Exists(root)) throw new InvalidOperationException("The backup root is unavailable.");
+            return Task.CompletedTask;
+        }, "Mount the backup root containing logical bundles.");
+        await Inspect("Logical backup inventory", () =>
+        {
+            if (!logical.List().Any(b => b.Mode == "logical")) throw new InvalidOperationException("No logical backups are available.");
+            return Task.CompletedTask;
+        }, "Mount a completed logical backup bundle.");
+        await Inspect("Required tools", async () =>
+        {
+            foreach (var tool in new[] { "psql", "pg_restore", "createdb", "dropdb" })
+                if (!(await RunTool(tool, ["--version"], ct)).Success) throw new InvalidOperationException($"{tool} is unavailable.");
+        }, "Install matching PostgreSQL client tools.");
+        return new(checks, null, null, 0, true);
+
+        async Task Inspect(string name, Func<Task> action, string remediation)
+        {
+            try { await action(); checks.Add(new(name, CheckState.Passed, "Check passed.", "", DateTimeOffset.UtcNow)); }
+            catch (Exception ex) when (IsCheckError(ex, ct)) { checks.Add(new(name, CheckState.Failed, ex.Message, remediation, DateTimeOffset.UtcNow)); }
+        }
+    }
+
     public async Task<ReadinessReport> CheckAsync(CancellationToken ct)
     {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);

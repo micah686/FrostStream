@@ -12,6 +12,7 @@ internal sealed class RecoveryCredential
 {
     private readonly byte[] digest;
     private readonly string? generatedToken;
+    private int tokenLogged;
 
     public RecoveryCredential(string? token, string? alias)
     {
@@ -26,7 +27,7 @@ internal sealed class RecoveryCredential
 
     public void LogGeneratedToken(ILogger logger)
     {
-        if (generatedToken is not null)
+        if (generatedToken is not null && Interlocked.Exchange(ref tokenLogged, 1) == 0)
             logger.LogWarning("\n===== FROSTSTREAM RESTORE CONSOLE TOKEN =====\n{RecoveryToken}\n===========================================", generatedToken);
     }
 
@@ -89,7 +90,7 @@ internal static class RecoveryConsole
                 context.Response.Headers["Referrer-Policy"] = "no-referrer";
                 context.Response.Headers["X-Content-Type-Options"] = "nosniff";
                 context.Response.Headers["Content-Security-Policy"] =
-                    "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+                    "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
             }
             await next();
         });
@@ -102,7 +103,7 @@ internal static class RecoveryConsole
         path.Equals("/recovery.css", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("/recovery.js", StringComparison.OrdinalIgnoreCase);
 
-    public static string Time(DateTimeOffset time) => time.ToString("MMM d, yyyy · HH:mm:ss 'UTC'zzz", CultureInfo.InvariantCulture);
+    public static string Time(DateTimeOffset time) => time.ToUniversalTime().ToString("MMM d, yyyy · HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
 
     public static string Bytes(long bytes) => bytes >= 1024L * 1024 * 1024
         ? FormattableString.Invariant($"{bytes / (1024d * 1024 * 1024):0.##} GiB")

@@ -1,0 +1,7 @@
+@page
+@inject BackupServiceNew.PgBackRestWrapper.WrapperOptions Options
+@{ ViewData["Title"] = "Settings and help"; }
+<h1>Recovery settings</h1><p class="lede">These settings are supplied by the service deployment.</p>
+<dl class="facts"><div><dt>Stanza</dt><dd>@Options.Stanza</dd></div><div><dt>Database destination</dt><dd>@Options.DataPath</dd></div><div><dt>Repository</dt><dd>@Options.RepositoryPath</dd></div><div><dt>PostgreSQL socket</dt><dd>@Options.SocketPath</dd></div></dl>
+<div class="notice"><strong>Console access</strong>Set BACKUP_RESTORE_UI_TOKEN or the existing Backup:RestoreUiToken alias. When both are blank, a fresh cryptographically random token is printed once in the service startup log.</div>
+<h2>Recovery guidance</h2><p>Physical recovery requires PostgreSQL and all writers stopped. Logical recovery requires PostgreSQL running and application writers stopped. Keep independent copies of populated PGDATA, key material, configuration and external storage.</p>

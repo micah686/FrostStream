@@ -18,6 +18,7 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
     private BackupJobs Jobs => services.GetRequiredService<BackupJobs>();
 
     internal RecoveryPlan? Plan { get; private set; }
+    internal RecoveryJob? Rehearsal { get; private set; }
     internal RecoveryJob? Archive { get; private set; }
     internal RecoveryJob? Checksum { get; private set; }
     internal string StanzaName => Plans.Stanza;
@@ -41,24 +42,30 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct) => await LoadAsync(ct) ?? Page();
 
+    public async Task<IActionResult> OnPostRehearsalAsync(CancellationToken ct)
+    {
+        if (await LoadAsync(ct) is { } result) return result;
+        return Plan is null || Plan.Backup.Mode == "logical" || !ModelState.IsValid ? Page() : await EnqueueAsync("rehearsal", null, ct);
+    }
+
     public async Task<IActionResult> OnPostArchiveAsync(CancellationToken ct)
     {
         if (await LoadAsync(ct) is { } result) return result;
-        return Plan is null || !ModelState.IsValid ? Page() : await EnqueueAsync("archive", null, ct);
+        return Plan is null || Plan.Backup.Mode == "logical" || !ModelState.IsValid ? Page() : await EnqueueAsync("archive", null, ct);
     }
 
     public async Task<IActionResult> OnPostChecksumAsync(CancellationToken ct)
     {
         if (await LoadAsync(ct) is { } result) return result;
-        return Plan is null || !ModelState.IsValid ? Page() : await EnqueueAsync("checksum", null, ct);
+        return Plan is null || Plan.Backup.Mode == "logical" || !ModelState.IsValid ? Page() : await EnqueueAsync("checksum", null, ct);
     }
 
     public async Task<IActionResult> OnPostConfirmAsync(CancellationToken ct)
     {
         if (await LoadAsync(ct) is { } result) return result;
         if (Plan is not { } plan) return Page();
-        if (!string.Equals(Stanza, Plans.Stanza, StringComparison.Ordinal))
-            ModelState.AddModelError(nameof(Stanza), "Type the exact stanza name.");
+        if (!string.Equals(Stanza, plan.Backup.Mode == "logical" ? "RESTORE ALL" : Plans.Stanza, StringComparison.Ordinal))
+            ModelState.AddModelError(nameof(Stanza), plan.Backup.Mode == "logical" ? "Type RESTORE ALL exactly." : "Type the exact stanza name.");
         if (!Authorized)
             ModelState.AddModelError(nameof(Authorized), "Confirm services are stopped and replacement is authorized.");
         if (Archive?.Status is "queued" or "running" or "failed" || Archive?.Stage == "archive-failed")
@@ -67,13 +74,13 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
             ModelState.AddModelError("", "Review the backup checksum job before continuing.");
         if (plan.Wal.State == CheckState.Unknown && !AcceptUnknownWal)
             ModelState.AddModelError(nameof(AcceptUnknownWal), "Acknowledge the limits of the available WAL evidence.");
-        if (!plan.Backup.OpenBaoExportPresent && !AcceptMissingCompanion)
+        if (plan.Backup.Mode != "logical" && !plan.Backup.OpenBaoExportPresent && !AcceptMissingCompanion)
             ModelState.AddModelError(nameof(AcceptMissingCompanion), "Acknowledge the missing OpenBao companion.");
 
         if (!ModelState.IsValid) return Page();
         try
         {
-            var rollback = plan.Populated && !string.IsNullOrWhiteSpace(Rollback) ? Plans.ValidateRollback(plan, Rollback) : null;
+            var rollback = plan.Backup.Mode != "logical" && plan.Populated ? Plans.ValidateRollback(plan, Rollback) : null;
             return await EnqueueAsync("restore", rollback, ct);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
@@ -87,22 +94,30 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
     {
         if (Jobs.GetRecovery(Id) is { Kind: "restore" } existing)
             return RedirectToPage("./Run", new { id = existing.Id });
+        Rehearsal = Jobs.GetPlanJob(Id, "rehearsal");
         Archive = Jobs.GetPlanJob(Id, "archive");
         Checksum = Jobs.GetPlanJob(Id, "checksum");
         var plan = Plans.Get(Id);
         // Long validations can outlive the original review. Keep their pinned plan
         // available for a fresh confirmation window after the evidence is observed.
-        var evidence = new[] { Archive, Checksum }.OfType<RecoveryJob>()
-            .Where(job => job.Status == "completed" && job.Stage is "archive-passed" or "archive-unknown" or "checksum-passed" or "checksum-unknown")
+        var evidence = new[] { Archive, Checksum, Rehearsal }.OfType<RecoveryJob>()
+            .Where(job => job.Status == "completed" && job.Stage is "archive-passed" or "archive-unknown" or "checksum-passed" or "checksum-unknown" or "rehearsed")
             .MaxBy(job => job.ObservedAt);
         if (evidence?.ObservedAt is { } observed && observed.AddMinutes(30) > (plan?.ExpiresAt ?? DateTimeOffset.UtcNow))
             plan = evidence.Plan with { ExpiresAt = observed.AddMinutes(30) };
         if (plan is null) return null;
         try
         {
-            Plans.Revalidate(plan, await services.GetRequiredService<RecoveryReadiness>().CheckAsync(ct));
+            if (plan.Backup.Mode == "logical")
+            {
+                var logical = services.GetRequiredService<LogicalBackups>();
+                if (plan.ExpiresAt <= DateTimeOffset.UtcNow || plan.ManifestHash != await logical.ManifestHashAsync(plan.Backup.Label, ct))
+                    throw new InvalidOperationException("The logical plan expired or its source changed. Choose the backup again.");
+                await logical.ProbeRestoreAsync(ct);
+            }
+            else Plans.Revalidate(plan, await services.GetRequiredService<RecoveryReadiness>().CheckAsync(ct));
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             ModelState.AddModelError("", ex.Message);
             return null;

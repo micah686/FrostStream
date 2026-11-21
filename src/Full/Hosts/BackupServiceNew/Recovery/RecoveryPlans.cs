@@ -9,7 +9,10 @@ namespace BackupServiceNew.Recovery;
 
 internal sealed record WalAssessment(CheckState State, string Detail, DateTimeOffset ObservedAt);
 internal sealed record RecoveryPlan(Guid Id, DateTimeOffset ExpiresAt, RecoveryMode Mode, DateTimeOffset? Target,
-    BackupInfoDto Backup, string ArchiveId, int PostgresMajor, string Destination, bool Populated, long RequiredBytes, WalAssessment Wal);
+    BackupInfoDto Backup, string ArchiveId, int PostgresMajor, string Destination, bool Populated, long RequiredBytes, WalAssessment Wal)
+{
+    public string? ManifestHash { get; init; }
+}
 internal sealed record BackupPage(IReadOnlyList<BackupInfoDto> Items, int Number, int TotalPages, int Total);
 
 internal sealed class RecoveryPlans(WrapperOptions options, BackupRepository repository, IMemoryCache cache)
@@ -31,6 +34,19 @@ internal sealed class RecoveryPlans(WrapperOptions options, BackupRepository rep
         page = Math.Clamp(page, 1, pages);
         return new(matches.Skip((page - 1) * PageSize).Take(PageSize).Select(repository.Describe).ToArray(),
             page, pages, matches.Length);
+    }
+
+    public async Task<RecoveryPlan> CreateLogicalAsync(LogicalBackups logical, string label, CancellationToken ct)
+    {
+        var backup = logical.List().SingleOrDefault(b => b.Label == label && b.Mode == "logical")
+            ?? throw new InvalidOperationException("Choose an available logical backup.");
+        var hash = await logical.ManifestHashAsync(label, ct);
+        await logical.VerifyAsync(label, false, new Progress<OutputLine>(), ct);
+        if (hash != await logical.ManifestHashAsync(label, ct)) throw new InvalidOperationException("The backup changed during verification.");
+        var plan = new RecoveryPlan(Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(30), RecoveryMode.Consistency, null,
+            backup, "", 0, options.SocketPath, true, 0, new(CheckState.Passed, "Logical backups do not replay WAL.", DateTimeOffset.UtcNow)) { ManifestHash = hash };
+        cache.Set(plan.Id, plan, plan.ExpiresAt);
+        return plan;
     }
 
     public RecoveryPlan Create(ReadinessReport readiness, RecoveryMode mode, string? label, DateTimeOffset? target)

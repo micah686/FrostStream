@@ -7,6 +7,8 @@ namespace BackupServiceNew.Pages.Recovery;
 
 public sealed class ChooseModel(IServiceProvider services) : PageModel
 {
+    [BindProperty(SupportsGet = true)] public string Kind { get; set; } = "physical";
+    internal global::Shared.Backups.BackupInfoDto[] LogicalInventory { get; private set; } = [];
     [BindProperty(SupportsGet = true)] public string? Mode { get; set; }
     internal string SelectedMode => string.IsNullOrEmpty(Mode) ? "latest" : Mode;
     [BindProperty(SupportsGet = true)] public string? Query { get; set; }
@@ -28,6 +30,16 @@ public sealed class ChooseModel(IServiceProvider services) : PageModel
         if (!Readiness.Ready) return Page();
         if (!ModelState.IsValid) return Page();
 
+        if (Kind == "logical")
+        {
+            try
+            {
+                var plan = await services.GetRequiredService<RecoveryPlans>().CreateLogicalAsync(services.GetRequiredService<LogicalBackups>(), Label ?? "", ct);
+                return RedirectToPage("./Review", new { id = plan.Id });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException)
+            { ModelState.AddModelError("", ex.Message); return Page(); }
+        }
         DateTimeOffset? target = null;
         if (SelectedMode == "time")
         {
@@ -60,6 +72,13 @@ public sealed class ChooseModel(IServiceProvider services) : PageModel
 
     private async Task LoadAsync(CancellationToken ct)
     {
+        if (Kind == "logical")
+        {
+            var logical = services.GetRequiredService<LogicalBackups>();
+            Readiness = await services.GetRequiredService<RecoveryReadiness>().CheckLogicalAsync(logical, ct);
+            LogicalInventory = logical.List().Where(b => b.Mode == "logical").OrderByDescending(b => b.CompletedAt).ToArray();
+            return;
+        }
         Readiness = await services.GetRequiredService<RecoveryReadiness>().CheckAsync(ct);
         if (SelectedMode != "manual" || !Readiness.Ready) return;
         if (From > To) ModelState.AddModelError("", "The end date must be on or after the start date.");

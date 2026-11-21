@@ -2,17 +2,30 @@
 @model ReviewModel
 @{
     ViewData["Title"] = "Review & confirm";
-    ViewData["Step"] = 3;
+    ViewData["Step"] = 4;
 }
-<h1>Review &amp; confirm</h1>
+<h1>Validate &amp; confirm</h1>
 <div asp-validation-summary="All" class="form-errors" role="alert"></div>
 @if (Model.Plan is not { } plan)
 {
     <p class="lede">This plan is unavailable. Run readiness checks and choose a recovery source again.</p>
-    <a class="primary" asp-page="/Index" asp-route-run="true">Back to readiness</a>
+    <a class="primary" asp-page="/Recovery/Readiness" asp-route-run="true">Back to readiness</a>
+}
+else if (plan.Backup.Mode == "logical")
+{
+    ViewData["RecoveryType"] = "Logical";
+    ViewData["Target"] = "All databases";
+    <div class="notice danger"><strong>This restores all databases in the backup</strong>Existing databases with matching names will be dropped and recreated. Keep application writers stopped and preserve an independent rollback copy.</div>
+    <dl class="facts"><div><dt>Pinned backup</dt><dd>@plan.Backup.Label</dd></div><div><dt>Target</dt><dd>All databases in the backup</dd></div><div><dt>Destination</dt><dd>@plan.Destination</dd></div><div><dt>Verification</dt><dd>Bundle hashes verified. All dumps will be checked again before replacement.</dd></div></dl>
+    <form method="post" asp-page-handler="Confirm" asp-route-id="@plan.Id" class="stack" data-confirmation>
+        <div class="field"><label asp-for="Stanza">Type RESTORE ALL to confirm</label><input asp-for="Stanza" required autocomplete="off" data-expected="RESTORE ALL" /></div>
+        <label class="ack"><input asp-for="Authorized" /> PostgreSQL is running, application writers are stopped, and I authorize replacing all databases in this backup.</label>
+        <button class="destructive" type="submit">Start logical restore</button>
+    </form>
 }
 else
 {
+    ViewData["Target"] = plan.Target?.ToString("u") ?? (plan.Mode == RecoveryMode.Latest ? "Latest available" : "Selected backup");
     <p class="lede">Check the pinned source, restore destination and available evidence before starting.</p>
     <section class="surface">
         <h2>Recovery plan</h2>
@@ -81,20 +94,30 @@ else
             <div><dt>OpenBao companion</dt><dd>@(plan.Backup.OpenBaoExportPresent ? "Available for separate recovery" : "Missing. Database salvage can proceed with acknowledgement.")</dd></div>
         </dl>
     </section>
+    <div class="notice"><strong>Optional isolated recovery rehearsal</strong>Test this exact target without replacing production. Requires at least @RecoveryConsole.Bytes(plan.RequiredBytes) of additional space on the temporary volume.
+    @if (Model.Rehearsal is { } rehearsal)
+    {
+        <p>@rehearsal.Status · @rehearsal.Observation @rehearsal.Error</p><a asp-page="./Run" asp-route-id="@rehearsal.Id">View rehearsal progress</a>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="Rehearsal" asp-route-id="@plan.Id"><button class="secondary" type="submit">Run rehearsal</button></form>
+    }
+    </div>
     <section class="surface confirmation">
         <h2>Authorize the restore</h2>
         <p class="notice">Restoration replaces the entire PostgreSQL cluster, including every other database hosted there.</p>
-        <form method="post" asp-page-handler="Confirm" asp-route-id="@plan.Id" class="stack">
+        <form method="post" asp-page-handler="Confirm" asp-route-id="@plan.Id" class="stack" data-confirmation>
             <div class="field">
                 <label asp-for="Stanza">Type the stanza name <code>@Model.StanzaName</code></label>
-                <input asp-for="Stanza" spellcheck="false" autocomplete="off" required />
+                <input asp-for="Stanza" spellcheck="false" autocomplete="off" required data-expected="@Model.StanzaName" />
             </div>
             @if (plan.Populated)
             {
                 <div class="field">
-                    <label asp-for="Rollback">Path to a preserved PGDATA copy (optional)</label>
-                    <input asp-for="Rollback" placeholder="/backups/rollback/pgdata" aria-describedby="rollback-help" />
-                    <small id="rollback-help">Recommended: preserve a complete, independent copy before replacement. Without one, the original data may be lost. If provided, use an absolute path mounted in BackupService on a separate volume.</small>
+                    <label asp-for="Rollback">Path to an independently preserved PGDATA copy</label>
+                    <input asp-for="Rollback" placeholder="/backups/rollback/pgdata" required aria-describedby="rollback-help" />
+                    <small id="rollback-help">Preserve a complete, independent copy before replacement. Use an absolute path mounted in BackupService on a separate volume.</small>
                 </div>
             }
             <label class="ack"><input asp-for="Authorized" /> PostgreSQL and all writers are stopped. I authorize replacing the entire cluster.</label>

@@ -47,7 +47,12 @@ public sealed record RestoreRequest
 public sealed record RestoreReceipt(Guid Id, RestoreRequest Request, string BackupLabel, RecoveryStage Stage,
     DateTimeOffset UpdatedAt, string Evidence, string PostgresVersion);
 public sealed record ScratchRequest(string RootDirectory, string? BackupLabel = null,
-    IReadOnlyList<string>? ExpectedDatabases = null, IReadOnlyList<SqlAssertion>? Assertions = null);
+    IReadOnlyList<string>? ExpectedDatabases = null, IReadOnlyList<SqlAssertion>? Assertions = null)
+{
+    public RecoveryMode Mode { get; init; } = RecoveryMode.Consistency;
+    public DateTimeOffset? Timestamp { get; init; }
+    public long MinimumFreeBytes { get; init; }
+}
 public sealed record SqlAssertion(string Database, string Sql, string ExpectedOutput);
 public sealed record ScratchResult(string Directory, RestoreReceipt Restore, IReadOnlyList<string> Checks,
     TimeSpan Duration, bool CleanedUp);

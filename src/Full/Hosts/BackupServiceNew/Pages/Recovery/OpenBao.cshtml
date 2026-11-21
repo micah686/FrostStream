@@ -2,8 +2,9 @@
 @model OpenBaoModel
 @{
     ViewData["Title"] = "Restore OpenBao";
-    ViewData["Step"] = 5;
+    ViewData["Step"] = 6;
     var job = Model.Job;
+    ViewData["RecoveryType"] = job.Plan.Backup.Mode == "logical" ? "Logical" : "Physical";
 }
 <h1>Restore OpenBao</h1>
 <p class="lede">PostgreSQL recovery passed its checks. Keep application writers stopped while recovering the OpenBao companion for <code>@job.Plan.Backup.Label</code>.</p>
@@ -43,3 +44,10 @@
     </ol>
 </section>
 <a class="quiet back-link" asp-page="./Run" asp-route-id="@job.Id">← Monitor PostgreSQL recovery</a>
+
+<div class="footer"><a class="secondary" asp-page="./Run" asp-route-id="@job.Id">Back</a>
+@if (Model.OpenBaoJob?.Status is not ("queued" or "running"))
+{
+    <a class="primary" asp-page="./Other" asp-route-id="@job.Id">@(Model.OpenBaoJob?.Stage == "openbao-restored" ? "Continue to other data" : "Skip for now")</a>
+}
+</div>
