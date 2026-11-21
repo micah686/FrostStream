@@ -156,7 +156,7 @@ internal sealed class LogicalBackups(BackupServiceOptions settings, ICommandRunn
         await ProbeRestoreAsync(ct);
         foreach (var database in manifest.Databases)
         {
-            await Run("dropdb", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--if-exists", "--", database], progress, ct);
+            await Run("dropdb", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--if-exists", "--force", "--", database], progress, ct);
             await Run("createdb", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--", database], progress, ct);
             await Run("pg_restore", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "--exit-on-error", "--no-owner", "--no-privileges", "-d", database, Path.Combine(directory, "postgres_logical", database)], progress, ct);
             await Run("psql", ["-h", settings.PostgresSocketDirectory, "-p", settings.PostgresPort.ToString(), "-U", settings.PostgresUser, "-w", "-d", database, "-v", "ON_ERROR_STOP=1", "-c", "SELECT count(*) FROM pg_catalog.pg_class"], progress, ct);

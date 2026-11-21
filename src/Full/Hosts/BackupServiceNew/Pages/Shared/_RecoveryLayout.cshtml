@@ -27,11 +27,6 @@ else
     <div class="app">
         <aside class="sidebar">
             <a class="brand" asp-page="/Index"><span class="brandicon" aria-hidden="true">◈</span><span class="brandtext">Recovery Console</span></a>
-            <div class="side-label">WORKSPACE</div>
-            <a class="side-item" asp-page="/Recovery/Readiness" aria-label="Overview"><span aria-hidden="true">▦</span><label>Overview</label></a>
-            <a class="side-item" asp-page="/Recovery/Choose" asp-route-mode="manual" aria-label="Backups"><span aria-hidden="true">◷</span><label>Backups</label></a>
-            <a class="side-item active" asp-page="/Index" aria-label="Recovery"><span aria-hidden="true">◉</span><label>Recovery</label></a>
-            <a class="side-item" href="/recovery/readiness#recent" aria-label="Activity log"><span aria-hidden="true">≡</span><label>Activity log</label></a>
             <div class="side-label">SYSTEM</div>
             <a class="side-item" asp-page="/Recovery/Settings" aria-label="Settings"><span aria-hidden="true">⚙</span><label>Settings</label></a>
             <div class="side-bottom"><b>Recovery environment</b><br />@HostEnvironment.EnvironmentName<br /><span>Stanza: @Options.Stanza</span></div>

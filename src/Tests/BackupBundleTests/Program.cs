@@ -27,6 +27,8 @@ try
     if (restoreCommands.Count(c => c.Executable == "dropdb") != settings.ExpectedDatabases.Length
         || restoreCommands.Count(c => c.Executable == "pg_restore" && c.Arguments.Contains("--exit-on-error")) != settings.ExpectedDatabases.Length)
         throw new Exception("Logical restore must replace all databases.");
+    if (restoreCommands.Where(c => c.Executable == "dropdb").Any(c => !c.Arguments.Contains("--force")))
+        throw new Exception("Logical restore must disconnect existing database sessions.");
     if (Array.FindIndex(restoreCommands, c => c.Executable == "dropdb") < settings.ExpectedDatabases.Length)
         throw new Exception("Dump preflight must precede replacement.");
     await File.AppendAllTextAsync(Path.Combine(root, backup.Label, "postgres_logical", settings.ExpectedDatabases[0], "toc.dat"), "corrupt");
