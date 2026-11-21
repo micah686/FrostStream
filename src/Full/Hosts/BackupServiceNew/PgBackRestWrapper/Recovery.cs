@@ -94,8 +94,10 @@ public sealed partial class PgBackRestClient
         if (Paths.FreeBytes(destination) < Math.Max(options.MinimumFreeBytes, request.MinimumFreeBytes)) throw new IOException("Insufficient destination free capacity.");
         if (Directory.EnumerateFileSystemEntries(destination).Any())
         {
-            if (!request.Delta) throw new InvalidOperationException("A populated destination requires Delta and a preserved rollback copy. Delta can remove or replace existing data.");
-            if (request.PreservedRollbackDirectory == null) throw new InvalidOperationException("A preserved rollback directory is required for populated destinations.");
+            if (!request.Delta) throw new InvalidOperationException("A populated destination requires Delta. Delta can remove or replace existing data.");
+        }
+        if (request.PreservedRollbackDirectory != null)
+        {
             var rollback = Paths.Absolute(request.PreservedRollbackDirectory);
             Paths.NoLinks(rollback); Paths.Disjoint(rollback, destination);
             Paths.Disjoint(rollback, options.RepositoryPath); Paths.Disjoint(rollback, options.StatePath);

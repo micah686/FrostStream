@@ -36,15 +36,17 @@ else
             </dd></div>
             <div><dt>Dependencies</dt><dd>@(plan.Backup.Dependencies is { Count: > 0 } dependencies ? string.Join(", ", dependencies) : "Standalone full backup")</dd></div>
             <div><dt>Destination</dt><dd><code>@plan.Destination</code><br />PostgreSQL @plan.PostgresMajor · @RecoveryConsole.Bytes(plan.RequiredBytes) free required</dd></div>
-            <div><dt>Replacement</dt><dd>@(plan.Populated ? "Delta restore may replace or remove existing files. An independently preserved PGDATA copy is required." : "Restore into an empty PostgreSQL data directory.")</dd></div>
+            <div><dt>Replacement</dt><dd>@(plan.Populated ? "Delta restore may replace or remove existing files. Preserving an independent PGDATA copy is recommended; without one, the original data may be lost." : "Restore into an empty PostgreSQL data directory.")</dd></div>
             <div><dt>Excluded storage</dt><dd>OpenBao, media and other external application storage must be reconciled separately.</dd></div>
         </dl>
     </section>
-    <section class="surface">
+    <section class="surface" id="verification-evidence" data-evidence-active="@(Model.Archive?.Status is "queued" or "running" || Model.Checksum?.Status is "queued" or "running" ? "true" : "false")">
         <h2>Verification evidence</h2>
         <dl class="facts">
             <div><dt>Backup metadata</dt><dd>Pinned source, dependency chain and major version checked.</dd></div>
             <div><dt>Backup checksums</dt><dd>
+                @{ var checksumState = ReviewModel.EvidenceState(Model.Checksum, "checksum-passed"); }
+                <span class="pill @ReviewModel.EvidenceClass(checksumState)">@checksumState</span>
                 @if (Model.Checksum is { } checksum)
                 {
                     <span>@(checksum.Observation ?? $"Checksum check {checksum.Status}.")</span>
@@ -58,25 +60,25 @@ else
                     </form>
                 }
             </dd></div>
-            <div><dt>Archive assessment</dt><dd><span class="pill warning">@plan.Wal.State</span> @plan.Wal.Detail <br /><small>Observed @RecoveryConsole.Time(plan.Wal.ObservedAt.ToLocalTime())</small></dd></div>
+            <div><dt>Archive assessment</dt><dd>
+                <span class="pill warning">@plan.Wal.State</span>
+                <span>Archive coverage beyond the backup and recovery target reachability remain unknown.</span>
+                @if (Model.Archive is { } archive)
+                {
+                    var archiveState = ReviewModel.EvidenceState(archive, "archive-passed");
+                    <br /><span>WAL readability: </span><span class="pill @ReviewModel.EvidenceClass(archiveState)">@archiveState</span>
+                    <span>@(archive.Observation ?? archive.Error ?? $"WAL check {archive.Status}.")</span>
+                    <a asp-page="./Run" asp-route-id="@archive.Id">View check</a>
+                }
+                else
+                {
+                    <br /><span>@plan.Wal.Detail</span><br /><small>Observed @RecoveryConsole.Time(plan.Wal.ObservedAt.ToLocalTime())</small>
+                    <form class="inline-form" method="post" asp-page-handler="Archive" asp-route-id="@plan.Id">
+                        <button class="secondary" type="submit">Check WAL readability</button>
+                    </form>
+                }
+            </dd></div>
             <div><dt>OpenBao companion</dt><dd>@(plan.Backup.OpenBaoExportPresent ? "Available for separate recovery" : "Missing. Database salvage can proceed with acknowledgement.")</dd></div>
-            @if (plan.Mode != RecoveryMode.Latest)
-            {
-                <div><dt>Isolated rehearsal</dt><dd>
-                    @if (Model.Rehearsal is { } rehearsal)
-                    {
-                        @(rehearsal.Stage == "rehearsed" ? "The pinned target was reached and checked in isolation." : $"Rehearsal {rehearsal.Status}.")
-                        <a asp-page="./Run" asp-route-id="@rehearsal.Id">View rehearsal</a>
-                    }
-                    else
-                    {
-                        <span>Requires @RecoveryConsole.Bytes(plan.RequiredBytes) free in scratch space. Available @(Model.ScratchFreeBytes is { } free ? RecoveryConsole.Bytes(free) : "unknown").</span>
-                        <form class="inline-form" method="post" asp-page-handler="Rehearse" asp-route-id="@plan.Id">
-                            <button class="secondary" type="submit" disabled="@(Model.ScratchFreeBytes is null || Model.ScratchFreeBytes < plan.RequiredBytes)">Rehearse this target</button>
-                        </form>
-                    }
-                </dd></div>
-            }
         </dl>
     </section>
     <section class="surface confirmation">
@@ -90,14 +92,13 @@ else
             @if (plan.Populated)
             {
                 <div class="field">
-                    <label asp-for="Rollback">Path to the preserved PGDATA copy</label>
-                    <input asp-for="Rollback" placeholder="/backups/rollback/pgdata" required aria-describedby="rollback-help" />
-                    <small id="rollback-help">Use the absolute path as mounted in BackupService, on a volume separate from the destination.</small>
+                    <label asp-for="Rollback">Path to a preserved PGDATA copy (optional)</label>
+                    <input asp-for="Rollback" placeholder="/backups/rollback/pgdata" aria-describedby="rollback-help" />
+                    <small id="rollback-help">Recommended: preserve a complete, independent copy before replacement. Without one, the original data may be lost. If provided, use an absolute path mounted in BackupService on a separate volume.</small>
                 </div>
-                <label class="ack"><input asp-for="Preserved" /> I preserved a complete, independent PGDATA copy before replacement.</label>
             }
             <label class="ack"><input asp-for="Authorized" /> PostgreSQL and all writers are stopped. I authorize replacing the entire cluster.</label>
-            @if (plan.Wal.State == CheckState.Unknown && Model.Rehearsal?.Stage != "rehearsed")
+            @if (plan.Wal.State == CheckState.Unknown)
             {
                 <label class="ack"><input asp-for="AcceptUnknownWal" /> I accept the remaining unknowns in WAL coverage and target reachability.</label>
             }
@@ -106,7 +107,7 @@ else
                 <label class="ack"><input asp-for="AcceptMissingCompanion" /> I acknowledge the missing OpenBao companion and will reconcile secrets separately.</label>
             }
             <div class="actions">
-                <button class="destructive" type="submit" disabled="@(Model.Rehearsal?.Status is "queued" or "running" or "failed" || Model.Checksum?.Status is "queued" or "running" || Model.Checksum?.Stage == "checksum-failed")">Restore database files</button>
+                <button id="restore-button" class="destructive" type="submit" disabled="@(Model.Archive?.Status is "queued" or "running" or "failed" || Model.Archive?.Stage == "archive-failed" || Model.Checksum?.Status is "queued" or "running" || Model.Checksum?.Stage == "checksum-failed")">Restore database files</button>
                 <span class="caption">Plan expires <time datetime="@plan.ExpiresAt.ToString("O")" data-local-time>@RecoveryConsole.Time(plan.ExpiresAt.ToLocalTime())</time></span>
             </div>
         </form>

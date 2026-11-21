@@ -11,7 +11,6 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
     [BindProperty] public string? Stanza { get; set; }
     [BindProperty] public bool Authorized { get; set; }
     [BindProperty] public string? Rollback { get; set; }
-    [BindProperty] public bool Preserved { get; set; }
     [BindProperty] public bool AcceptUnknownWal { get; set; }
     [BindProperty] public bool AcceptMissingCompanion { get; set; }
 
@@ -19,23 +18,33 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
     private BackupJobs Jobs => services.GetRequiredService<BackupJobs>();
 
     internal RecoveryPlan? Plan { get; private set; }
-    internal RecoveryJob? Rehearsal { get; private set; }
+    internal RecoveryJob? Archive { get; private set; }
     internal RecoveryJob? Checksum { get; private set; }
-    internal long? ScratchFreeBytes { get; private set; }
     internal string StanzaName => Plans.Stanza;
+    internal static string EvidenceState(RecoveryJob? job, string passedStage) => job switch
+    {
+        null => "Unknown",
+        { Status: "queued" or "running" } => "Processing",
+        { Status: "failed" } => "Failed",
+        { Stage: "checksum-failed" or "archive-failed" } => "Failed",
+        _ when job.Stage == passedStage => "Passed",
+        _ => "Unknown"
+    };
+
+    internal static string EvidenceClass(string state) => state switch
+    {
+        "Passed" => "type-full",
+        "Failed" => "danger",
+        "Unknown" => "warning",
+        _ => ""
+    };
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct) => await LoadAsync(ct) ?? Page();
 
-    public async Task<IActionResult> OnPostRehearseAsync(CancellationToken ct)
+    public async Task<IActionResult> OnPostArchiveAsync(CancellationToken ct)
     {
         if (await LoadAsync(ct) is { } result) return result;
-        if (Plan is null || !ModelState.IsValid) return Page();
-        if (Plan.Mode == RecoveryMode.Latest || ScratchFreeBytes is null || ScratchFreeBytes < Plan.RequiredBytes)
-        {
-            ModelState.AddModelError("", "A rehearsal requires a fixed target and enough scratch space.");
-            return Page();
-        }
-        return await EnqueueAsync("rehearsal", null, ct);
+        return Plan is null || !ModelState.IsValid ? Page() : await EnqueueAsync("archive", null, ct);
     }
 
     public async Task<IActionResult> OnPostChecksumAsync(CancellationToken ct)
@@ -52,13 +61,11 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
             ModelState.AddModelError(nameof(Stanza), "Type the exact stanza name.");
         if (!Authorized)
             ModelState.AddModelError(nameof(Authorized), "Confirm services are stopped and replacement is authorized.");
-        if (plan.Populated && !Preserved)
-            ModelState.AddModelError(nameof(Preserved), "Confirm that you preserved an independent rollback copy.");
-        if (Rehearsal?.Status is "queued" or "running" or "failed")
-            ModelState.AddModelError("", "A completed rehearsal is required for this plan. Review its job log.");
+        if (Archive?.Status is "queued" or "running" or "failed" || Archive?.Stage == "archive-failed")
+            ModelState.AddModelError("", "Review the archive readability check before continuing.");
         if (Checksum?.Status is "queued" or "running" || Checksum?.Stage == "checksum-failed")
             ModelState.AddModelError("", "Review the backup checksum job before continuing.");
-        if (plan.Wal.State == CheckState.Unknown && Rehearsal?.Stage != "rehearsed" && !AcceptUnknownWal)
+        if (plan.Wal.State == CheckState.Unknown && !AcceptUnknownWal)
             ModelState.AddModelError(nameof(AcceptUnknownWal), "Acknowledge the limits of the available WAL evidence.");
         if (!plan.Backup.OpenBaoExportPresent && !AcceptMissingCompanion)
             ModelState.AddModelError(nameof(AcceptMissingCompanion), "Acknowledge the missing OpenBao companion.");
@@ -66,7 +73,7 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
         if (!ModelState.IsValid) return Page();
         try
         {
-            var rollback = plan.Populated ? Plans.ValidateRollback(plan, Rollback) : null;
+            var rollback = plan.Populated && !string.IsNullOrWhiteSpace(Rollback) ? Plans.ValidateRollback(plan, Rollback) : null;
             return await EnqueueAsync("restore", rollback, ct);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
@@ -80,13 +87,13 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
     {
         if (Jobs.GetRecovery(Id) is { Kind: "restore" } existing)
             return RedirectToPage("./Run", new { id = existing.Id });
-        Rehearsal = Jobs.GetPlanJob(Id, "rehearsal");
+        Archive = Jobs.GetPlanJob(Id, "archive");
         Checksum = Jobs.GetPlanJob(Id, "checksum");
         var plan = Plans.Get(Id);
         // Long validations can outlive the original review. Keep their pinned plan
         // available for a fresh confirmation window after the evidence is observed.
-        var evidence = new[] { Rehearsal, Checksum }.OfType<RecoveryJob>()
-            .Where(job => job.Status == "completed" && job.Stage is "rehearsed" or "checksum-passed" or "checksum-unknown")
+        var evidence = new[] { Archive, Checksum }.OfType<RecoveryJob>()
+            .Where(job => job.Status == "completed" && job.Stage is "archive-passed" or "archive-unknown" or "checksum-passed" or "checksum-unknown")
             .MaxBy(job => job.ObservedAt);
         if (evidence?.ObservedAt is { } observed && observed.AddMinutes(30) > (plan?.ExpiresAt ?? DateTimeOffset.UtcNow))
             plan = evidence.Plan with { ExpiresAt = observed.AddMinutes(30) };
@@ -102,11 +109,6 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
         }
 
         Plan = plan;
-        if (plan.Mode != RecoveryMode.Latest)
-        {
-            try { ScratchFreeBytes = services.GetRequiredService<RecoveryExecution>().ScratchFreeBytes; }
-            catch (IOException) { }
-        }
         return null;
     }
 
@@ -115,7 +117,7 @@ public sealed class ReviewModel(IServiceProvider services) : PageModel
         try
         {
             var id = await Jobs.QueueRecoveryAsync(Plan!, kind, rollback, ct);
-            return RedirectToPage("./Run", new { id });
+            return kind == "restore" ? RedirectToPage("./Run", new { id }) : RedirectToPage("./Review", new { id = Plan!.Id });
         }
         catch (InvalidOperationException ex)
         {

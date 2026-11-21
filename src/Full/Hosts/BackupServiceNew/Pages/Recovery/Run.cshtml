@@ -4,7 +4,9 @@
     var job = Model.Job;
     var rehearsal = job.Kind == "rehearsal";
     var checksum = job.Kind == "checksum";
+    var archive = job.Kind == "archive";
     var restore = job.Kind == "restore";
+    var baoRestore = job.Kind == "openbao";
     var active = job.Status is "queued" or "running";
     var complete = job.Stage == "database-validated";
     var paused = job.Stage == "target-paused";
@@ -24,8 +26,10 @@
         "files-restored" => "Database files restored",
         _ => "Recovery status unknown"
     };
-    ViewData["Title"] = restore ? "Monitor recovery" : checksum ? "Backup checksum check" : "Recovery rehearsal";
-    ViewData["Step"] = restore ? 4 : 3;
+    if (archive) status = job.Status == "failed" ? "WAL check needs attention" : job.Stage switch { "archive-passed" => "WAL readability passed", "archive-failed" => "WAL readability failed", "archive-unknown" => "WAL readability unknown", _ => "Checking WAL readability" };
+    if (baoRestore) status = job.Status == "failed" ? "OpenBao restore needs attention" : job.Stage == "openbao-restored" ? "OpenBao snapshot restored" : "Restoring OpenBao snapshot";
+    ViewData["Title"] = archive ? "WAL readability" : baoRestore ? "OpenBao restore" : restore ? "Monitor recovery" : checksum ? "Backup checksum check" : "Recovery rehearsal";
+    ViewData["Step"] = baoRestore ? 5 : restore ? 4 : 3;
 }
 <h1>@status</h1>
 <p class="lede">Pinned backup <code>@job.Plan.Backup.Label</code></p>
@@ -56,7 +60,7 @@
         }
     </section>
 }
-@if (active)
+@if (active || Model.OpenBaoJob?.Status is "queued" or "running")
 {
     <p class="caption" data-refresh-job><a asp-page="./Run" asp-route-id="@job.Id">Refresh progress</a></p>
 }
@@ -86,11 +90,8 @@ docker compose logs -f postgres</pre>
         }
         else
         {
-            <ol class="next-steps">
-                <li>Reconcile OpenBao secrets, media, external storage and supporting infrastructure.</li>
-                <li>Start application services and verify FrostStream before enabling writers. Rebuild indexes where needed.</li>
-                <li>Confirm WAL archiving is healthy and take a new backup.</li>
-            </ol>
+            <p>PostgreSQL recovery has passed its checks. Keep application writers stopped and continue to restore OpenBao.</p>
+            <a class="primary" asp-page="./OpenBao" asp-route-id="@job.Id">Continue to OpenBao recovery →</a>
         }
     </section>
 }
@@ -101,7 +102,7 @@ docker compose logs -f postgres</pre>
 </section>
 @if (!restore)
 {
-    <a class="quiet back-link" asp-page="./Review" asp-route-id="@job.Plan.Id">← Review recovery plan</a>
+    <a class="quiet back-link" asp-page="@(baoRestore ? "./OpenBao" : "./Review")" asp-route-id="@job.Plan.Id">← @(baoRestore ? "OpenBao recovery" : "Review recovery plan")</a>
 }
 else
 {

@@ -106,7 +106,7 @@ internal sealed class BackupJobs(
                 throw new InvalidOperationException("The recovery plan expired. Choose a recovery source again.");
             if (jobs.Values.Any(job => IsRecovery(job) && job.Status is "queued" or "running"))
                 throw new InvalidOperationException("A recovery operation is already queued or running. Wait for it to finish.");
-            if (kind == "restore" && (GetPlanJob(plan.Id, "rehearsal")?.Status == "failed"
+            if (kind == "restore" && (GetPlanJob(plan.Id, "archive")?.Stage == "archive-failed"
                 || GetPlanJob(plan.Id, "checksum")?.Stage == "checksum-failed"))
                 throw new InvalidOperationException("The pinned source failed a recovery check. Investigate the failure and create a new plan.");
             var id = kind == "restore" ? plan.Id : Guid.NewGuid();
@@ -120,6 +120,30 @@ internal sealed class BackupJobs(
         {
             admission.Release();
         }
+    }
+
+    public async Task QueueOpenBaoAsync(Guid id, CancellationToken ct)
+    {
+        await admission.WaitAsync(ct);
+        try
+        {
+            if (!jobs.TryGetValue(id, out var job) || job is not { Kind: "restore", Status: "completed", Stage: "database-validated", ReceiptId: { } receipt, Plan: { } plan })
+                throw new InvalidOperationException("Complete the PostgreSQL recovery check first.");
+            if (jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > job.CreatedAt))
+                throw new InvalidOperationException("A newer restore exists. Use its recovery page.");
+            if (GetPlanJob(plan.Id, "openbao") is not null)
+                throw new InvalidOperationException("An OpenBao restore was already started for this recovery. Inspect its result before taking further action.");
+            if (jobs.Values.Any(other => IsRecovery(other) && other.Status is "queued" or "running"))
+                throw new InvalidOperationException("Another recovery operation is running.");
+            if (!openBao.HasSnapshotExport(plan.Backup.Label))
+                throw new InvalidOperationException("The paired OpenBao snapshot is missing.");
+            var observation = await recovery.ObserveAsync(plan, receipt, job.TargetWasPaused, ct);
+            if (observation.Stage != "database-validated")
+                throw new InvalidOperationException("PostgreSQL has not completed recovery. Run the recovery check again.");
+            await EnqueueAsync(new Job(Guid.NewGuid(), "openbao", DateTimeOffset.UtcNow)
+                { Plan = plan, Label = plan.Backup.Label, Stage = "queued" });
+        }
+        finally { admission.Release(); }
     }
 
     public async Task ObserveRecoveryAsync(Guid id, CancellationToken ct)
@@ -259,6 +283,30 @@ internal sealed class BackupJobs(
     private async Task RunRecoveryAsync(Job job, JobProgress progress, CancellationToken ct)
     {
         var plan = job.Plan!;
+        if (job.Kind == "openbao")
+        {
+            var database = GetRecovery(plan.Id);
+            if (database is not { Kind: "restore", Status: "completed", Stage: "database-validated", ReceiptId: { } databaseReceipt } ||
+                jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > database.CreatedAt))
+                throw new InvalidOperationException("The database recovery is no longer current.");
+            var observed = await recovery.ObserveAsync(plan, databaseReceipt, jobs[plan.Id].TargetWasPaused, ct);
+            if (observed.Stage != "database-validated") throw new InvalidOperationException("PostgreSQL recovery is not complete.");
+            await SaveAsync(job with { Stage = "restoring-openbao" });
+            progress.Add("Verifying the paired snapshot checksum and restoring OpenBao through its API.");
+            await openBao.RestoreSnapshotAsync(plan.Backup.Label, ct);
+            await SaveAsync(jobs[job.Id] with { Stage = "openbao-restored", Observation = "OpenBao accepted the snapshot. Verify unseal state, authentication and application secrets before starting services.", ObservedAt = DateTimeOffset.UtcNow });
+            return;
+        }
+
+        if (job.Kind == "archive")
+        {
+            await SaveAsync(job with { Stage = "checking-archive" });
+            progress.Add("Retrieving the pinned backup's bounded WAL range.");
+            var result = await client.CheckArchiveReadabilityAsync(plan.ArchiveId, plan.Backup.WalStart, plan.Backup.WalStop, ct);
+            await SaveAsync(jobs[job.Id] with { Stage = "archive-" + result.Verdict.ToLowerInvariant(), Observation = result.Detail, ObservedAt = result.ObservedAt });
+            return;
+        }
+
         if (job.Kind == "checksum")
         {
             const string message = "Checking backup files for the pinned source.";
@@ -274,21 +322,14 @@ internal sealed class BackupJobs(
             return;
         }
 
-        await SaveAsync(job with { Stage = job.Kind == "rehearsal" ? "rehearsing" : "validating" });
-        progress.Add(job.Kind == "rehearsal" ? "Starting an isolated recovery rehearsal." : "Validating the pinned plan and restore destination.");
-        var receipt = job.Kind == "rehearsal"
-            ? await recovery.RehearseAsync(plan, progress, ct)
-            : await recovery.RestoreAsync(plan, job.Rollback, progress,
-                () => SaveAsync(jobs[job.Id] with { Stage = "restoring" }), ct);
-        var detail = job.Kind == "rehearsal" ? "The isolated PostgreSQL instance reached the pinned target and passed its SQL checks."
-            : "Database files restored. PostgreSQL startup, WAL replay and SQL checks are pending.";
+        if (job.Kind != "restore") throw new InvalidOperationException("This recovery operation is no longer supported.");
+        await SaveAsync(job with { Stage = "validating" });
+        progress.Add("Validating the pinned plan and restore destination.");
+        var receipt = await recovery.RestoreAsync(plan, job.Rollback, progress,
+            () => SaveAsync(jobs[job.Id] with { Stage = "restoring" }), ct);
+        const string detail = "Database files restored. PostgreSQL startup, WAL replay and SQL checks are pending.";
         progress.Add(detail);
-        await SaveAsync(jobs[job.Id] with
-        {
-            ReceiptId = receipt.Id,
-            Stage = job.Kind == "rehearsal" ? "rehearsed" : "files-restored",
-            Observation = detail, ObservedAt = receipt.UpdatedAt
-        });
+        await SaveAsync(jobs[job.Id] with { ReceiptId = receipt.Id, Stage = "files-restored", Observation = detail, ObservedAt = receipt.UpdatedAt });
     }
 
     private async Task RunBackupAsync(Job job, JobProgress progress, CancellationToken ct)
@@ -413,7 +454,7 @@ internal sealed class BackupJobs(
         StartedAt = job.StartedAt
     };
 
-    private static bool IsRecovery(Job job) => job.Kind is "restore" or "rehearsal" or "checksum";
+    private static bool IsRecovery(Job job) => job.Kind is "restore" or "rehearsal" or "checksum" or "openbao" or "archive";
 
     private RecoveryJob DescribeRecovery(Job job) => new(job.Id, job.Kind, job.Status, job.Stage!, job.Plan!, job.CreatedAt,
         job.ReceiptId, job.Observation, job.ObservedAt, job.Error,

@@ -29,3 +29,20 @@ if (document.querySelector("[data-refresh-job]")) {
         }
     }, 5000);
 }
+
+// Refresh only evidence and the restore button, preserving any confirmation fields in progress.
+if (document.querySelector("#verification-evidence")) {
+    window.setInterval(async () => {
+        const evidence = document.querySelector("#verification-evidence");
+        if (evidence?.dataset.evidenceActive !== "true" || document.visibilityState !== "visible") return;
+        try {
+            const response = await fetch(window.location.href, { cache: "no-store" });
+            if (!response.ok || response.redirected) return;
+            const page = new DOMParser().parseFromString(await response.text(), "text/html");
+            const updated = page.querySelector("#verification-evidence");
+            const button = page.querySelector("#restore-button");
+            if (updated) evidence.replaceWith(updated);
+            if (button && document.querySelector("#restore-button")) document.querySelector("#restore-button").disabled = button.disabled;
+        } catch { /* The next poll can retry. */ }
+    }, 5000);
+}

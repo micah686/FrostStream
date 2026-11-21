@@ -11,6 +11,7 @@ public sealed class RunModel(IServiceProvider services) : PageModel
 
     private BackupJobs Jobs => services.GetRequiredService<BackupJobs>();
     internal RecoveryJob Job { get; private set; } = null!;
+    internal RecoveryJob? OpenBaoJob { get; private set; }
     internal string DatabaseCommand
     {
         get
@@ -28,7 +29,9 @@ public sealed class RunModel(IServiceProvider services) : PageModel
         try
         {
             await Jobs.ObserveRecoveryAsync(Id, ct);
-            return RedirectToPage("./Run", new { id = Id });
+            return Jobs.GetRecovery(Id)?.Stage == "database-validated"
+                ? RedirectToPage("./OpenBao", new { id = Id })
+                : RedirectToPage("./Run", new { id = Id });
         }
         catch (Exception ex) when (ex is InvalidOperationException or CommandFailedException or IOException)
         {
@@ -42,6 +45,7 @@ public sealed class RunModel(IServiceProvider services) : PageModel
     private bool Load()
     {
         Job = Jobs.GetRecovery(Id)!;
+        if (Job is not null && Job.Kind == "restore") OpenBaoJob = Jobs.GetPlanJob(Job.Plan.Id, "openbao");
         return Job is not null;
     }
 }
