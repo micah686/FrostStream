@@ -4,6 +4,7 @@ using BackupService;
 using BackupService.PgBackRest;
 using BackupServiceNew;
 using BackupServiceNew.PgBackRestWrapper;
+using BackupServiceNew.Recovery;
 using Conduit.NATS;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using NodaTime;
@@ -32,7 +33,9 @@ var wrapper = new WrapperOptions
 var apiToken = Encoding.UTF8.GetBytes(configuration["ApiToken"] ?? "");
 builder.Services.AddSingleton(settings);
 builder.Services.AddSingleton(wrapper);
+builder.Services.AddSingleton<ICommandRunner, ProcessRunner>();
 builder.Services.AddSingleton<PgBackRestClient>();
+builder.AddRecoveryConsole(settings.RestoreUiToken);
 builder.Services.AddSingleton<OpenBaoPairing>();
 builder.Services.AddSingleton<BackupRepository>();
 builder.Services.AddSingleton<BackupJobs>();
@@ -48,6 +51,15 @@ builder.AddNats("nats", options =>
 });
 
 var app = builder.Build();
+app.UseRecoveryListener(settings.RestoreUiPort);
+app.UseStaticFiles();
+app.UseRouting();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapRazorPages();
+app.Lifetime.ApplicationStarted.Register(() =>
+    app.Services.GetRequiredService<RecoveryCredential>().LogGeneratedToken(app.Logger));
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/internal/backups"))

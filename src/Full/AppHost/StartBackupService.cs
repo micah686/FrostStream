@@ -21,14 +21,6 @@ public static class StartBackupService
             builder.ExecutionContext.IsPublishMode ? "./backups" : backupRoot,
             publishValueAsDefault: true);
 
-        // Static token guarding the break-glass restore wizard; must not depend on Authentik,
-        // which is down during a restore. Same minting pattern as media-processor-api-key.
-        var restoreUiToken = builder.AddParameter(
-            "backup-restore-ui-token",
-            Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN") ?? "froststream-dev-restore-token",
-            publishValueAsDefault: false,
-            secret: true);
-
         var pgBackRestConf = Path.Combine(builder.AppHostDirectory, "configs", "pgbackrest", "pgbackrest.conf");
         // The central package/build props live at the repository root; Dockerfile source
         // paths are rooted under src/.
@@ -38,24 +30,21 @@ public static class StartBackupService
             .WithHttpEndpoint(port: Ports.BackupService, targetPort: 8080, name: "http")
             // Host-published restore wizard; usable while everything except this container is down.
             .WithHttpEndpoint(port: Ports.BackupRestoreUi, targetPort: 8081, name: "restore-ui")
-            .WithReference(nats).WaitFor(nats)
-            .WithReference(postgres.FrostStreamDb).WaitFor(postgres.FrostStreamDb).WaitForDatabases(postgres)
+            .WithReference(nats)
             .WithEnvironment("Backup__Directory", ContainerBackupRoot)
             .WithEnvironment("Backup__Stanza", "main")
             .WithEnvironment("Backup__ApiToken", backupApiToken)
             .WithEnvironment("Backup__PgDataPath", "/var/lib/postgresql/18/docker")
             .WithEnvironment("Backup__PostgresHost", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Host))
-            .WithEnvironment("Backup__PostgresPort", postgres.Server.GetEndpoint("tcp").Property(EndpointProperty.Port))
+            .WithEnvironment("Backup__PostgresPort", "5432")
             .WithEnvironment("Backup__PostgresUser", postgres.User)
             .WithEnvironment("PGBACKREST_PG1_USER", postgres.User)
             .WithEnvironment("PGPASSWORD", postgres.Password)
             .WithEnvironment("Backup__OpenBaoAddress", openBao.Server.GetEndpoint("http"))
             .WithEnvironment("Backup__OpenBaoToken", openBaoToken)
             .WithEnvironment("Backup__OpenBaoKvMount", "secret")
-            .WithEnvironment("Backup__RestoreUiToken", restoreUiToken)
             // Ensures Aspire's compose publisher emits FROSTSTREAM_BACKUP_ROOT in .env.
             .WithEnvironment("Backup__HostRoot", backupRootParameter)
-            .WaitForOpenBao(openBao)
             .WithPortableBindMount(
                 backupRoot,
                 "${FROSTSTREAM_BACKUP_ROOT:-./backups}",
@@ -69,6 +58,25 @@ public static class StartBackupService
             // cluster files directly, and connects over the shared unix socket.
             .WithVolume("froststream-postgres-data", "/var/lib/postgresql")
             .WithVolume("froststream-postgres-socket", "/var/run/postgresql");
+
+        var restoreToken = Environment.GetEnvironmentVariable("BACKUP_RESTORE_UI_TOKEN");
+        if (builder.ExecutionContext.IsPublishMode && !string.IsNullOrWhiteSpace(restoreToken))
+        {
+            var parameter = builder.AddParameter("backup-restore-ui-token", restoreToken, publishValueAsDefault: false, secret: true);
+            service.WithEnvironment("BACKUP_RESTORE_UI_TOKEN", parameter);
+        }
+        else
+        {
+            service.WithEnvironment("BACKUP_RESTORE_UI_TOKEN", builder.ExecutionContext.IsPublishMode
+                ? "${BACKUP_RESTORE_UI_TOKEN:-}"
+                : restoreToken ?? "");
+        }
+
+        if (builder.Resources.OfType<ContainerResource>().FirstOrDefault(resource => resource.Name == "backup-init") is { } backupInit)
+        {
+            service.WaitForCompletion(builder.CreateResourceBuilder(backupInit));
+            service.WithComposeDependencyCondition("backup-init", "service_completed_successfully");
+        }
 
         service.WithEndpoint("restore-ui", endpoint =>
         {
@@ -97,7 +105,6 @@ public static class StartBackupService
                 StartPeriod = "20s"
             };
         });
-        service.WithComposeDependencyCondition("openbao", "service_healthy");
 
         return service;
     }

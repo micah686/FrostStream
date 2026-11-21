@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using BackupService;
 using BackupService.PgBackRest;
 using BackupServiceNew.PgBackRestWrapper;
+using BackupServiceNew.Recovery;
 using Shared.Backups;
 using Shared.Messaging;
 
@@ -15,6 +16,7 @@ internal sealed class BackupJobs(
     PgBackRestClient client,
     BackupRepository repository,
     OpenBaoPairing openBao,
+    RecoveryExecution recovery,
     IBackgroundRunReporter runReporter,
     ILogger<BackupJobs> logger) : BackgroundService
 {
@@ -47,14 +49,17 @@ internal sealed class BackupJobs(
             if (job is null)
                 continue;
 
-            if (job.Status == "running")
+            if (job.Status == "running" || IsRecovery(job) && job.Status == "queued")
             {
                 // The wrapper assigns its operation annotation internally. An interrupted command
                 // may have committed a backup, so retain the idempotency key and never replay it.
                 await SaveAsync(job with
                 {
                     Status = "failed",
-                    Error = "The backup service restarted before this job finished. Check the repository for any completed backup.",
+                    Error = IsRecovery(job)
+                        ? "The service restarted before this operation finished. Review its logs and inspect the destination before starting another restore."
+                        : "The backup service restarted before this job finished. Check the repository for any completed backup.",
+                    Progress = IsRecovery(job) ? ReadRecoveryLog(job.Id) : job.Progress,
                     CompletedAt = DateTimeOffset.UtcNow
                 });
             }
@@ -76,9 +81,68 @@ internal sealed class BackupJobs(
         base.Dispose();
     }
 
-    public BackupJobDto[] List() => jobs.Values.OrderByDescending(job => job.CreatedAt).Select(Describe).ToArray();
+    public BackupJobDto[] List() => jobs.Values.Where(job => !IsRecovery(job))
+        .OrderByDescending(job => job.CreatedAt).Select(Describe).ToArray();
 
-    public BackupJobDto? Get(Guid id) => jobs.TryGetValue(id, out var job) ? Describe(job) : null;
+    public BackupJobDto? Get(Guid id) => jobs.TryGetValue(id, out var job) && !IsRecovery(job) ? Describe(job) : null;
+
+    public RecoveryJob? GetRecovery(Guid id) => jobs.TryGetValue(id, out var job) && IsRecovery(job) ? DescribeRecovery(job) : null;
+
+    public RecoveryJob? GetPlanJob(Guid planId, string kind) => jobs.Values
+        .Where(job => job.Kind == kind && job.Plan?.Id == planId)
+        .OrderByDescending(job => job.CreatedAt).Select(DescribeRecovery).FirstOrDefault();
+
+    public RecoveryJob[] RecentRecoveries() => jobs.Values.Where(job => job.Kind == "restore")
+        .OrderByDescending(job => job.CreatedAt).Take(5).Select(DescribeRecovery).ToArray();
+
+    public async Task<Guid> QueueRecoveryAsync(RecoveryPlan plan, string kind, string? rollback, CancellationToken ct)
+    {
+        await admission.WaitAsync(ct);
+        try
+        {
+            var existing = kind == "restore" ? GetRecovery(plan.Id) : GetPlanJob(plan.Id, kind);
+            if (existing is not null) return existing.Id;
+            if (plan.ExpiresAt <= DateTimeOffset.UtcNow)
+                throw new InvalidOperationException("The recovery plan expired. Choose a recovery source again.");
+            if (jobs.Values.Any(job => IsRecovery(job) && job.Status is "queued" or "running"))
+                throw new InvalidOperationException("A recovery operation is already queued or running. Wait for it to finish.");
+            if (kind == "restore" && (GetPlanJob(plan.Id, "rehearsal")?.Status == "failed"
+                || GetPlanJob(plan.Id, "checksum")?.Stage == "checksum-failed"))
+                throw new InvalidOperationException("The pinned source failed a recovery check. Investigate the failure and create a new plan.");
+            var id = kind == "restore" ? plan.Id : Guid.NewGuid();
+            await EnqueueAsync(new Job(id, kind, DateTimeOffset.UtcNow)
+            {
+                Plan = plan, Rollback = rollback, Label = plan.Backup.Label, Stage = "queued"
+            });
+            return id;
+        }
+        finally
+        {
+            admission.Release();
+        }
+    }
+
+    public async Task ObserveRecoveryAsync(Guid id, CancellationToken ct)
+    {
+        await admission.WaitAsync(ct);
+        try
+        {
+            if (!jobs.TryGetValue(id, out var job) || job is not { Kind: "restore", Status: "completed", ReceiptId: { } receiptId, Plan: { } plan })
+                throw new InvalidOperationException("No database file restoration receipt is available.");
+            if (jobs.Values.Any(other => other.Kind == "restore" && other.CreatedAt > job.CreatedAt))
+                throw new InvalidOperationException("A newer restore exists. Use its recovery page for PostgreSQL checks.");
+            var observation = await recovery.ObserveAsync(plan, receiptId, job.TargetWasPaused, ct);
+            await SaveAsync(job with
+            {
+                Stage = observation.Stage, Observation = observation.Detail, ObservedAt = DateTimeOffset.UtcNow,
+                TargetWasPaused = job.TargetWasPaused || observation.Stage == "target-paused"
+            });
+        }
+        finally
+        {
+            admission.Release();
+        }
+    }
 
     public async Task<BackupJobDto> QueueBackupAsync(CreateBackupJobRequest request, CancellationToken ct)
     {
@@ -152,12 +216,14 @@ internal sealed class BackupJobs(
     private async Task RunAsync(Job job, CancellationToken ct)
     {
         await SaveAsync(job with { Status = "running", StartedAt = DateTimeOffset.UtcNow });
-        var progress = new JobProgress();
+        var progress = new JobProgress(IsRecovery(job) ? Path.Combine(jobsPath, $"{job.Id:N}.log") : null);
         liveProgress[job.Id] = progress;
         try
         {
             if (job.Kind == "backup")
                 await RunBackupAsync(jobs[job.Id], progress, ct);
+            else if (IsRecovery(job))
+                await RunRecoveryAsync(jobs[job.Id], progress, ct);
             else if (job.Kind is "verify-quick" or "verify-deep")
                 await RunVerifyAsync(job, progress, ct);
             else if (job.Kind is "check" or "expire" or "inspect-archive")
@@ -170,7 +236,8 @@ internal sealed class BackupJobs(
         {
             logger.LogError(ex, "Backup service job {JobId} failed.", job.Id);
             var message = ct.IsCancellationRequested
-                ? "The backup service stopped during this job. Check the repository for any completed backup."
+                ? IsRecovery(job) ? "The service stopped during recovery. Inspect the destination before starting another restore."
+                    : "The backup service stopped during this job. Check the repository for any completed backup."
                 : ex.Message[..Math.Min(ex.Message.Length, 4096)];
             await FinishAsync("failed", message);
         }
@@ -186,6 +253,41 @@ internal sealed class BackupJobs(
             CompletedAt = DateTimeOffset.UtcNow,
             ResultSummary = progress.ResultSummary,
             Progress = progress.Lines()
+        });
+    }
+
+    private async Task RunRecoveryAsync(Job job, JobProgress progress, CancellationToken ct)
+    {
+        var plan = job.Plan!;
+        if (job.Kind == "checksum")
+        {
+            const string message = "Checking backup files for the pinned source.";
+            await SaveAsync(job with { Stage = "checksumming" });
+            progress.Add(message);
+            var result = await client.AssessCoverageAsync(plan.Backup.Label, ct);
+            var unsupported = result.Reasons.Any(reason => reason.Contains("not supported", StringComparison.Ordinal));
+            var stage = result.BackupVerified ? "checksum-passed" : unsupported ? "checksum-unknown" : "checksum-failed";
+            var checksumDetail = result.BackupVerified
+                ? "pgBackRest checksum verification passed for the pinned backup."
+                : string.Join(" ", result.Reasons);
+            await SaveAsync(jobs[job.Id] with { Stage = stage, Observation = checksumDetail, ObservedAt = result.ObservedAt });
+            return;
+        }
+
+        await SaveAsync(job with { Stage = job.Kind == "rehearsal" ? "rehearsing" : "validating" });
+        progress.Add(job.Kind == "rehearsal" ? "Starting an isolated recovery rehearsal." : "Validating the pinned plan and restore destination.");
+        var receipt = job.Kind == "rehearsal"
+            ? await recovery.RehearseAsync(plan, progress, ct)
+            : await recovery.RestoreAsync(plan, job.Rollback, progress,
+                () => SaveAsync(jobs[job.Id] with { Stage = "restoring" }), ct);
+        var detail = job.Kind == "rehearsal" ? "The isolated PostgreSQL instance reached the pinned target and passed its SQL checks."
+            : "Database files restored. PostgreSQL startup, WAL replay and SQL checks are pending.";
+        progress.Add(detail);
+        await SaveAsync(jobs[job.Id] with
+        {
+            ReceiptId = receipt.Id,
+            Stage = job.Kind == "rehearsal" ? "rehearsed" : "files-restored",
+            Observation = detail, ObservedAt = receipt.UpdatedAt
         });
     }
 
@@ -311,8 +413,27 @@ internal sealed class BackupJobs(
         StartedAt = job.StartedAt
     };
 
+    private static bool IsRecovery(Job job) => job.Kind is "restore" or "rehearsal" or "checksum";
+
+    private RecoveryJob DescribeRecovery(Job job) => new(job.Id, job.Kind, job.Status, job.Stage!, job.Plan!, job.CreatedAt,
+        job.ReceiptId, job.Observation, job.ObservedAt, job.Error,
+        job.Status == "running" && liveProgress.TryGetValue(job.Id, out var progress) ? progress.Lines() : job.Progress);
+
+    private string[] ReadRecoveryLog(Guid id)
+    {
+        var path = Path.Combine(jobsPath, $"{id:N}.log");
+        return File.Exists(path) ? File.ReadLines(path).TakeLast(100).ToArray() : [];
+    }
+
     private sealed record Job(Guid Id, string Kind, DateTimeOffset CreatedAt)
     {
+        public RecoveryPlan? Plan { get; init; }
+        public string? Rollback { get; init; }
+        public Guid? ReceiptId { get; init; }
+        public string? Stage { get; init; }
+        public string? Observation { get; init; }
+        public DateTimeOffset? ObservedAt { get; init; }
+        public bool TargetWasPaused { get; init; }
         public string? ResultSummary { get; init; }
         public string Status { get; init; } = "queued";
         public string? Name { get; init; }
@@ -328,11 +449,12 @@ internal sealed class BackupJobs(
         public string[] Progress { get; init; } = [];
     }
 
-    private sealed class JobProgress : IProgress<OutputLine>
+    private sealed class JobProgress(string? logPath) : IProgress<OutputLine>
     {
         public string? ResultSummary { get; set; }
 
         private readonly Queue<string> lines = new();
+        private int loggedCharacters;
 
         public void Report(OutputLine value) => Add(value.Text.TrimEnd());
 
@@ -340,6 +462,12 @@ internal sealed class BackupJobs(
         {
             lock (lines)
             {
+                if (logPath is not null && loggedCharacters < 1024 * 1024)
+                {
+                    File.AppendAllText(logPath, text + Environment.NewLine);
+                    loggedCharacters += text.Length + 1;
+                }
+
                 lines.Enqueue(text);
                 if (lines.Count > 100)
                     lines.Dequeue();
@@ -353,3 +481,7 @@ internal sealed class BackupJobs(
         }
     }
 }
+
+internal sealed record RecoveryJob(Guid Id, string Kind, string Status, string Stage, RecoveryPlan Plan,
+    DateTimeOffset CreatedAt, Guid? ReceiptId, string? Observation, DateTimeOffset? ObservedAt,
+    string? Error, IReadOnlyList<string> Progress);

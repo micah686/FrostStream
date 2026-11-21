@@ -1,0 +1,109 @@
+@page "{id:guid}"
+@model RunModel
+@{
+    var job = Model.Job;
+    var rehearsal = job.Kind == "rehearsal";
+    var checksum = job.Kind == "checksum";
+    var restore = job.Kind == "restore";
+    var active = job.Status is "queued" or "running";
+    var complete = job.Stage == "database-validated";
+    var paused = job.Stage == "target-paused";
+    var status = job.Status == "failed" ? (restore ? "Restore needs attention" : rehearsal ? "Rehearsal needs attention" : "Checksum check needs attention") : job.Stage switch {
+        "queued" => restore ? "Restore queued" : rehearsal ? "Rehearsal queued" : "Checksum check queued",
+        "checksumming" => "Checking backup checksums",
+        "checksum-passed" => "Backup checksums passed",
+        "checksum-unknown" => "Backup checksums unknown",
+        "checksum-failed" => "Backup checksum check failed",
+        "rehearsing" => "Rehearsal in progress",
+        "rehearsed" => "Rehearsal passed",
+        "validating" => "Rechecking the restore plan",
+        "restoring" => "Restoring database files",
+        "replaying" => "Replaying archived WAL",
+        "target-paused" => "Recovery target paused",
+        "database-validated" => "Database checks passed",
+        "files-restored" => "Database files restored",
+        _ => "Recovery status unknown"
+    };
+    ViewData["Title"] = restore ? "Monitor recovery" : checksum ? "Backup checksum check" : "Recovery rehearsal";
+    ViewData["Step"] = restore ? 4 : 3;
+}
+<h1>@status</h1>
+<p class="lede">Pinned backup <code>@job.Plan.Backup.Label</code></p>
+@if (restore && job.Status != "failed")
+{
+    var phases = new[] { "Validating", "Restoring files", "Awaiting startup", "WAL replay", "Target inspection", "Database checks" };
+    var phase = job.Stage switch { "restoring" => 1, "files-restored" => 2, "replaying" => 3, "target-paused" => 4, "database-validated" => 5, _ => 0 };
+    <ol class="phases" aria-label="Recovery progress">
+        @for (var i = 0; i < phases.Length; i++)
+        {
+            if (i == 4 && job.Plan.Mode != RecoveryMode.Timestamp) { continue; }
+            <li class="@(i == phase ? "current" : i < phase ? "done" : "")" aria-current="@(i == phase ? "step" : null)">@phases[i]</li>
+        }
+    </ol>
+}
+<div asp-validation-summary="All" class="form-errors" role="alert"></div>
+@if (job.Error is { } error)
+{
+    <p class="notice" role="alert">@error</p>
+}
+@if (job.Observation is { } observation)
+{
+    <section class="surface">
+        <p>@observation</p>
+        @if (job.ObservedAt is { } time)
+        {
+            <p class="caption">Observed <time datetime="@time.ToString("O")" data-local-time>@RecoveryConsole.Time(time.ToLocalTime())</time></p>
+        }
+    </section>
+}
+@if (active)
+{
+    <p class="caption" data-refresh-job><a asp-page="./Run" asp-route-id="@job.Id">Refresh progress</a></p>
+}
+@if (restore && job.ReceiptId is not null && !active && job.Status != "failed")
+{
+    <section class="surface">
+        <h2>Start PostgreSQL and verify recovery</h2>
+        @if (!complete)
+        {
+            <p>Keep all writers stopped. Start PostgreSQL alone from the deployment directory and monitor its logs.</p>
+            <pre class="command">docker compose up -d --no-deps postgres
+docker compose logs -f postgres</pre>
+            @if (job.Plan.Mode == RecoveryMode.Timestamp)
+            {
+                <p>At the configured time, inspect the paused data using read-only queries. Observe the pause in this console before accepting recovery. Leave replay paused if the data is incorrect.</p>
+                <pre class="command">@Model.DatabaseCommand -c "SELECT pg_is_in_recovery(), pg_get_wal_replay_pause_state(), pg_last_xact_replay_timestamp();"</pre>
+                @if (paused)
+                {
+                    <p>When you accept this target, resume replay and confirm PostgreSQL has left recovery before enabling writers.</p>
+                    <pre class="command">@Model.DatabaseCommand -c "SELECT pg_wal_replay_resume();"
+@Model.DatabaseCommand -c "SELECT pg_is_in_recovery();"</pre>
+                }
+            }
+            <form class="inline-form" method="post" asp-page-handler="Observe" asp-route-id="@job.Id">
+                <button class="primary" type="submit">Check PostgreSQL recovery</button>
+            </form>
+        }
+        else
+        {
+            <ol class="next-steps">
+                <li>Reconcile OpenBao secrets, media, external storage and supporting infrastructure.</li>
+                <li>Start application services and verify FrostStream before enabling writers. Rebuild indexes where needed.</li>
+                <li>Confirm WAL archiving is healthy and take a new backup.</li>
+            </ol>
+        }
+    </section>
+}
+<section class="surface log-panel">
+    <h2>Operation log</h2>
+    <pre>@(job.Progress.Count == 0 ? "Waiting for log output." : string.Join(Environment.NewLine, job.Progress))</pre>
+    <p class="caption">Job <code>@job.Id</code></p>
+</section>
+@if (!restore)
+{
+    <a class="quiet back-link" asp-page="./Review" asp-route-id="@job.Plan.Id">← Review recovery plan</a>
+}
+else
+{
+    <a class="quiet back-link" asp-page="/Index">← Readiness</a>
+}

@@ -1,0 +1,48 @@
+@{
+    var step = (int?)ViewData["Step"] ?? 0;
+    var steps = new[] { "Check readiness", "Choose recovery", "Review & confirm", "Monitor recovery" };
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] · FrostStream Recovery</title>
+    <link rel="stylesheet" href="/recovery.css" asp-append-version="true" />
+    <script src="/recovery.js" asp-append-version="true" defer></script>
+</head>
+<body>
+    <header class="masthead">
+        <div class="shell topbar">
+            <a class="brand" asp-page="/Index"><span class="brand-icon" aria-hidden="true">❄</span><span>FrostStream<span class="brand-sub">Recovery console</span></span></a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form method="post" asp-page="/Login" asp-page-handler="Logout"><button class="quiet" type="submit">Sign out</button></form>
+            }
+        </div>
+    </header>
+    @if (step > 0)
+    {
+        <div class="shell workspace">
+            <aside>
+                <nav aria-label="Recovery steps">
+                    <ol class="steps">
+                        @for (var i = 0; i < steps.Length; i++)
+                        {
+                            <li class="@(i + 1 == step ? "current" : i + 1 < step ? "done" : "")" aria-current="@(i + 1 == step ? "step" : null)">
+                                <span class="step-marker" aria-hidden="true">@(i + 1 < step ? "✓" : (i + 1).ToString())</span><span>@steps[i]</span>
+                            </li>
+                        }
+                    </ol>
+                </nav>
+                <p class="side-note">Service startup and recovery acceptance are operator-controlled.</p>
+            </aside>
+            <main id="main" class="main-panel">@RenderBody()</main>
+        </div>
+    }
+    else
+    {
+        <main id="main" class="login-wrap">@RenderBody()</main>
+    }
+</body>
+</html>
